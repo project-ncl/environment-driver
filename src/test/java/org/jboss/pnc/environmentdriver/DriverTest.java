@@ -15,29 +15,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package org.jboss.pnc.environmentdriver;
 
-package org.jboss.pnc.environmentdriver.invokerserver;
-
-import io.undertow.servlet.api.InstanceFactory;
-import io.undertow.servlet.api.InstanceHandle;
-import io.undertow.servlet.util.ImmediateInstanceHandle;
-import org.jboss.pnc.environmentdriver.dto.BuildCompleted;
-
-import java.util.function.Consumer;
+import io.quarkus.test.junit.QuarkusTest;
+import io.quarkus.test.security.TestSecurity;
 
 /**
  * @author <a href="mailto:matejonnet@gmail.com">Matej Lazar</a>
  */
-public class CallbackServletFactory implements InstanceFactory<CallbackHandler> {
+@QuarkusTest
+@TestSecurity(authorizationEnabled = false)
+public class DriverTest {
 
-    private final Consumer<BuildCompleted> consumer;
-
-    public CallbackServletFactory(Consumer<BuildCompleted> consumer) {
-        this.consumer = consumer;
-    }
-
-    @Override
-    public InstanceHandle<CallbackHandler> createInstance() throws InstantiationException {
-        return new ImmediateInstanceHandle<>(new CallbackHandler(consumer));
-    }
 }

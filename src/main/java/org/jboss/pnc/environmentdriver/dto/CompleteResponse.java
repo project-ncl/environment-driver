@@ -5,7 +5,6 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.extern.jackson.Jacksonized;
-import org.jboss.pnc.api.dto.Request;
 
 /**
  * @author <a href="mailto:matejonnet@gmail.com">Matej Lazar</a>
@@ -15,21 +14,9 @@ import org.jboss.pnc.api.dto.Request;
 @Jacksonized
 @Builder(builderClassName = "Builder")
 @JsonIgnoreProperties(ignoreUnknown = true)
-public class CreateRequest {
+public class CompleteResponse {
 
-    private String environmentLabel;
+    private final String debugHost;
+    private final int debugPort;
 
-    private Request completionCallback;
-
-    private String imageId;
-
-    private String repositoryDependencyUrl;
-
-    private String repositoryDeployUrl;
-
-    private String repositoryBuildContentId;
-
-    private String podMemoryOverride;
-
-    private boolean allowSshDebug;
 }

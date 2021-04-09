@@ -15,21 +15,9 @@ import org.jboss.pnc.api.dto.Request;
 @Jacksonized
 @Builder(builderClassName = "Builder")
 @JsonIgnoreProperties(ignoreUnknown = true)
-public class CreateRequest {
+public class CreateResponse {
 
-    private String environmentLabel;
+    private final String environmentId;
 
-    private Request completionCallback;
-
-    private String imageId;
-
-    private String repositoryDependencyUrl;
-
-    private String repositoryDeployUrl;
-
-    private String repositoryBuildContentId;
-
-    private String podMemoryOverride;
-
-    private boolean allowSshDebug;
+    private final Request cancel;
 }

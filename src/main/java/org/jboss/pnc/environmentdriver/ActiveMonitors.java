@@ -5,22 +5,29 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 
 import javax.enterprise.context.ApplicationScoped;
 
 import io.vertx.core.impl.ConcurrentHashSet;
 
 /**
+ * Keep a set of active monitors per key (pod name)
+ *
  * @author <a href="mailto:matejonnet@gmail.com">Matej Lazar</a>
  */
 @ApplicationScoped
 public class ActiveMonitors {
 
-    private Map<String, Set<CompletableFuture>> monitors = new HashMap<>();
+    private Map<String, Set<CompletableFuture>> monitors = new ConcurrentHashMap<>();
 
-    public void add(String key, CompletableFuture<Void> future) {
-        Set<CompletableFuture> futures = monitors.computeIfAbsent(key, (k) -> new ConcurrentHashSet<>());
+    public void add(String key, CompletableFuture future) {
+        Set<CompletableFuture> futures = monitors.computeIfAbsent(key, (k) -> new HashSet<>());
         futures.add(future);
+    }
+
+    public Set<CompletableFuture> get(String key) {
+        return monitors.get(key);
     }
 
     public void remove(String key) {
