@@ -36,21 +36,19 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.regex.Pattern;
 
-import javax.annotation.PostConstruct;
 import javax.enterprise.context.RequestScoped;
 import javax.inject.Inject;
 import javax.ws.rs.core.MediaType;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 import io.fabric8.kubernetes.api.model.Pod;
 import io.fabric8.kubernetes.api.model.PodList;
 import io.fabric8.kubernetes.api.model.Service;
 import io.fabric8.kubernetes.api.model.ServiceList;
-import io.fabric8.kubernetes.client.Config;
-import io.fabric8.kubernetes.client.ConfigBuilder;
+import io.fabric8.kubernetes.api.model.ServicePort;
 import io.fabric8.openshift.api.model.Route;
-import io.fabric8.openshift.client.DefaultOpenShiftClient;
 import io.fabric8.openshift.client.OpenShiftClient;
 import io.undertow.util.Headers;
 import net.jodah.failsafe.Failsafe;
@@ -99,47 +97,35 @@ public class Driver {
             "ImagePullBackOff", "Error", "InvalidImageName" };
 
     @Inject
+    JsonWebToken webToken;
+
+    @Inject
     ManagedExecutor executor;
 
     @Inject
-    JsonWebToken webToken;
+    ObjectMapper jsonMapper;
 
     @Inject
     Configuration configuration;
 
     @Inject
-    ObjectMapper mapper;
-
-    @Inject
     ActiveMonitors activeMonitors;
 
-    private OpenShiftClient client;
-    private java.net.http.HttpClient httpClient;
+    @Inject
+    OpenShiftClient openShiftClient;
 
-    private Optional<GaugeMetric> gaugeMetric = Optional.empty(); //TODO
+    @Inject
+    java.net.http.HttpClient httpClient;
 
-    @PostConstruct
-    void init() {
-        Config config = new ConfigBuilder()
-                .withNamespace(configuration.getOpenshiftNamespace())
-                .withMasterUrl(configuration.getOpenshiftApiUrl())
-                .withOauthToken(configuration.getOpenshiftApiToken())
-                .withConnectionTimeout(configuration.getOpenshiftClientConnectionTimeout())
-                .withRequestTimeout(configuration.getOpenshiftClientRequestTimeout())
-                .build();
-        client = new DefaultOpenShiftClient(config);
+    ObjectMapper yamlMapper = new ObjectMapper(new YAMLFactory());
 
-        httpClient = java.net.http.HttpClient.newBuilder()
-                .executor(executor)
-                .connectTimeout(Duration.ofSeconds(configuration.getHttpClientConnectTimeout()))
-                .build();
-    }
+    private Optional<GaugeMetric> gaugeMetric = Optional.empty(); // TODO
 
     /**
      * Calls the Openshift API to create required resources. Method does not wait for the resources to become available,
-     * when the resources are available the callback to the invoker is executed.
-     * If the resource creation requests fail, the CompletionStage is completed exceptionally.
-     * To keep the required state minimal, the retries should be handled externally.
+     * when the resources are available the callback to the invoker is executed. If the resource creation requests fail,
+     * the CompletionStage is completed exceptionally. To keep the required state minimal, the retries should be handled
+     * externally.
      *
      * @return CompletionStage which is completed when all required requests to the Openshift complete.
      */
@@ -164,7 +150,7 @@ public class Driver {
         environmentVariables.put("AProxDependencyUrl", createRequest.getRepositoryDependencyUrl());
         environmentVariables.put("AProxDeployUrl", createRequest.getRepositoryDeployUrl());
 
-        environmentVariables.put("containerPort", configuration.getContainerPort());
+        environmentVariables.put("containerPort", configuration.getBuildAgentContainerPort());
         environmentVariables.put("buildContentId", createRequest.getRepositoryBuildContentId());
         environmentVariables.put("accessToken", webToken.getRawToken());
 
@@ -174,9 +160,9 @@ public class Driver {
             return CompletableFuture.failedFuture(e);
         }
 
-        environmentVariables.put("resourcesMemory", builderPodMemory(
-                configuration.getBuilderPodMemory(),
-                createRequest.getPodMemoryOverride()));
+        environmentVariables.put(
+                "resourcesMemory",
+                builderPodMemory(configuration.getBuilderPodMemory(), createRequest.getPodMemoryOverride()));
 
         String buildAgentContextPath = "pnc-ba-" + environmentId;
 
@@ -194,33 +180,34 @@ public class Driver {
         }
 
         CompletableFuture<Pod> podFuture = CompletableFuture.supplyAsync(() -> {
-                Pod podCreationModel = createModelNode(
-                        configuration.getPodDefinition(),
-                        environmentVariables,
-                        Pod.class);
-                return client.pods().create(podCreationModel);
-            }, executor);
+            Pod podCreationModel = createModelNode(configuration.getPodDefinition(), environmentVariables, Pod.class);
+            return openShiftClient.pods().create(podCreationModel);
+        }, executor);
 
         CompletableFuture<Service> serviceFuture = CompletableFuture.supplyAsync(() -> {
-                Service serviceCreationModel = createModelNode(
-                        configuration.getServiceDefinition(),
-                        environmentVariables,
-                        Service.class);
-                return client.services().create(serviceCreationModel);
-            }, executor
-        );
+            Service serviceCreationModel = createModelNode(
+                    configuration.getServiceDefinition(),
+                    environmentVariables,
+                    Service.class);
+            return openShiftClient.services().create(serviceCreationModel);
+        }, executor);
 
         CompletableFuture<Void> podAndServiceFuture = CompletableFuture.allOf(podFuture, serviceFuture);
 
         return podAndServiceFuture
-                .thenApplyAsync((nul) -> startMonitor(serviceName, podName, createRequest.getCompletionCallback(), sshPassword), executor)
+                .thenApplyAsync(
+                        (nul) -> startMonitor(serviceName, podName, createRequest.getCompletionCallback(), sshPassword),
+                        executor)
                 .thenApplyAsync((nul) -> new CreateResponse(environmentId, getCancelRequest(environmentId)), executor);
     }
 
     private Request getCancelRequest(String environmentId) {
         return Request.builder()
                 .method(Request.Method.PUT)
-                .uri(URI.create(configuration.getThisServiceBaseUrl() + "/cancel/" + environmentId))
+                .uri(
+                        URI.create(
+                                Strings.stripEndingSlash(configuration.getThisServiceBaseUrl()) + "/cancel/"
+                                        + environmentId))
                 .headers(getHeaders())
                 .build();
     }
@@ -234,7 +221,6 @@ public class Driver {
         routeEnvVariables.put("route-name", "pnc-ba-route-" + environmentId);
         routeEnvVariables.put("route-path", "/pnc-ba-" + environmentId);
         routeEnvVariables.put("service-name", getServiceName(environmentId));
-        routeEnvVariables.put("build-agent-host", configuration.getBuildAgentHost());
 
         // Enable ssh forwarding and complete with the port to which ssh is forwarded
         return CompletableFuture.supplyAsync(() -> {
@@ -242,7 +228,7 @@ public class Driver {
                     configuration.getSshServiceDefinition(),
                     serviceEnvVariables,
                     Service.class);
-            Service sshService = client.services().create(serviceCreationModel);
+            Service sshService = openShiftClient.services().create(serviceCreationModel);
             return sshService.getSpec()
                     .getPorts()
                     .stream()
@@ -250,173 +236,170 @@ public class Driver {
                     .findAny()
                     .orElseThrow(() -> new RuntimeException("No ssh service in response! Service data: " + sshService))
                     .getNodePort();
-            }, executor)
-        .thenApplyAsync(sshPort -> {
+        }, executor).thenApplyAsync(sshPort -> {
             Route routeCreationModel = createModelNode(
                     configuration.getRouteDefinition(),
                     routeEnvVariables,
                     Route.class);
-            Route route = (Route) client.routes().create(routeCreationModel); //TODO remove cast
+            Route route = openShiftClient.routes().create(routeCreationModel);
             String sshHost = route.getSpec().getHost();
             return new InetSocketAddress(sshHost, sshPort);
         }, executor)
-        .thenComposeAsync(this::pingSsh)
-        .thenApplyAsync(socketAddr -> new CompleteResponse(socketAddr.getHostName(), socketAddr.getPort()));
+                .thenComposeAsync(this::pingSsh)
+                .thenApplyAsync(socketAddr -> new CompleteResponse(socketAddr.getHostName(), socketAddr.getPort()));
     }
 
     private CompletableFuture<InetSocketAddress> pingSsh(InetSocketAddress inetSocketAddress) {
         RetryPolicy<InetSocketAddress> retryPolicy = new RetryPolicy<InetSocketAddress>()
-                .withMaxDuration(Duration.ofSeconds(configuration.getSshPingRetryMaxDuration()))
+                .withMaxDuration(Duration.ofSeconds(configuration.getSshPingRetryDuration()))
                 .withBackoff(500, 5000, ChronoUnit.MILLIS)
-                .onRetry(ctx -> logger.warn("Ssh ping retry attempt:{}, last error:{}",
-                                            ctx.getAttemptCount(),
-                                            ctx.getLastFailure()));
-        return Failsafe.with(retryPolicy)
-                .with(executor)
-                .getAsync(() -> {
-                    Socket socket = new Socket();
-                    try {
-                        socket.connect(inetSocketAddress, configuration.getHttpClientConnectTimeout() * 1000);
-                        logger.info("Ssh-ping success.");
-                    } finally {
-                        try {
-                            socket.close();
-                        } catch (IOException e) {
-                            logger.warn("Failed to clean-up after ssh-ping.");
-                        }
-                    }
-                    return inetSocketAddress;
-                });
+                .onSuccess(ctx -> logger.info("SSH ping success."))
+                .onRetry(
+                        ctx -> logger.warn(
+                                "Ssh ping retry attempt: #{}, last error: [{}]",
+                                ctx.getAttemptCount(),
+                                ctx.getLastFailure()))
+                .onFailure(ctx -> logger.error("Unable to ping ssh service: {}.", ctx.getFailure().getMessage()))
+                .onAbort(e -> logger.warn("SSH ping ping aborted: {}.", e.getFailure().getMessage()));
+        return Failsafe.with(retryPolicy).with(executor).getAsync(() -> {
+            Socket socket = new Socket();
+            try {
+                socket.connect(inetSocketAddress, configuration.getHttpClientConnectTimeout() * 1000);
+                logger.info("Ssh-ping success.");
+            } finally {
+                try {
+                    socket.close();
+                } catch (IOException e) {
+                    logger.warn("Failed to clean-up after ssh-ping.");
+                }
+            }
+            return inetSocketAddress;
+        });
     }
 
     /**
-     * Method will try its best to destroy the environment.
-     * Fire and forget operation.
+     * Method will try its best to destroy the environment. Fire and forget operation.
      */
     public CompletionStage<Void> destroy(String environmentId) {
         String podName = getPodName(environmentId);
         String serviceName = getServiceName(environmentId);
         activeMonitors.cancel(podName);
 
-        RetryPolicy<String> retryPolicy = new RetryPolicy<String>()
-                .withMaxDuration(Duration.ofSeconds(configuration.getDestroyRetryMaxDuration()))
-                .withBackoff(1000, 10000, ChronoUnit.MILLIS)
-                .abortOn(UnableToStartException.class);
-
-        //delete service
-        Failsafe.with(retryPolicy)
-                .with(executor)
-                .runAsync(() -> {
-                    Service service = client.services().withName(serviceName).get();
-                    if (service != null) {
-                        if (client.services().delete(service)) {
-                            logger.info("Service {} deleted.", serviceName);
-                        } else {
-                            logger.warn("Service {} was not deleted.", serviceName);
-                        }
-                    } else {
-                        logger.warn("Service {} does not exists.", serviceName);
-                    }
-                });
-        //delete pod
-        Failsafe.with(retryPolicy)
-                .with(executor)
-                .runAsync(() -> {
-                    Pod pod = client.pods().withName(podName).get();
-                    if (pod != null) {
-                        if (client.pods().delete(pod)) {
-                            logger.info("Pod {} deleted.", podName);
-                        } else {
-                            logger.warn("Pod {} was not deleted.", podName);
-                        }
-                    } else {
-                        logger.warn("Pod {} does not exists.", podName);
-                    }
-                });
+        // delete service
+        RetryPolicy<String> serviceRetryPolicy = getDestroyRetryPolicy(serviceName);
+        Failsafe.with(serviceRetryPolicy).with(executor).runAsync(() -> {
+            Service service = openShiftClient.services().withName(serviceName).get();
+            if (service != null) {
+                if (openShiftClient.services().delete(service)) {
+                    logger.info("Service {} deleted.", serviceName);
+                } else {
+                    logger.warn("Service {} was not deleted.", serviceName);
+                }
+            } else {
+                logger.warn("Service {} does not exists.", serviceName);
+            }
+        });
+        // delete pod
+        RetryPolicy<String> podRetryPolicy = getDestroyRetryPolicy(podName);
+        Failsafe.with(podRetryPolicy).with(executor).runAsync(() -> {
+            Pod pod = openShiftClient.pods().withName(podName).get();
+            if (pod != null) {
+                if (openShiftClient.pods().delete(pod)) {
+                    logger.info("Pod {} deleted.", podName);
+                } else {
+                    logger.warn("Pod {} was not deleted.", podName);
+                }
+            } else {
+                logger.warn("Pod {} does not exists.", podName);
+            }
+        });
         return null;
     }
 
+    private RetryPolicy<String> getDestroyRetryPolicy(String resourceName) {
+        return new RetryPolicy<String>().withMaxDuration(Duration.ofSeconds(configuration.getDestroyRetryDuration()))
+                .withBackoff(1000, 10000, ChronoUnit.MILLIS)
+                .onSuccess(ctx -> logger.info("Destroy {} success.", resourceName))
+                .onRetry(
+                        ctx -> logger.warn(
+                                "Destroy {} retry attempt #{}, last error: [{}].",
+                                resourceName,
+                                ctx.getAttemptCount(),
+                                ctx.getLastFailure().getMessage()))
+                .onFailure(
+                        ctx -> logger.error("Unable to destroy {}: {}.", resourceName, ctx.getFailure().getMessage()))
+                .onAbort(e -> logger.warn("Destroy {} aborted: {}.", resourceName, e.getFailure().getMessage()));
+    }
+
     /**
-     * Method will try its best to destroy all the environments created from given environmentName.
-     * Fire and forget operation.
+     * Method will try its best to destroy all the environments created from given environmentName. Fire and forget
+     * operation.
      */
     public CompletionStage<Void> destroyAll(String environmentLabel) {
-        RetryPolicy<String> retryPolicy = new RetryPolicy<String>()
-                .withMaxDuration(Duration.ofSeconds(configuration.getDestroyRetryMaxDuration()))
-                .withBackoff(1000, 10000, ChronoUnit.MILLIS)
-                .abortOn(UnableToStartException.class);
-
-        //delete service
-        Failsafe.with(retryPolicy)
-                .with(executor)
-                .runAsync(() -> {
-                    ServiceList serviceList = client.services().withLabel("environment", environmentLabel).list();
-                    if (serviceList != null) {
-                        if (client.services().delete(serviceList.getItems())) {
-                            logger.info("Services {} deleted.", serviceList.getItems());
-                        } else {
-                            logger.warn("Services {} were not deleted.", serviceList.getItems());
-                        }
-                    } else {
-                        logger.warn("No services found by label {}.", environmentLabel);
-                    }
-                });
-        //delete pod
-        Failsafe.with(retryPolicy)
-                .with(executor)
-                .runAsync(() -> {
-                    PodList podList = client.pods().withLabel("environment", environmentLabel).list();
-                    if (podList != null) {
-                        if (client.pods().delete(podList.getItems())) {
-                            logger.info("Pods {} deleted.", podList.getItems());
-                        } else {
-                            logger.warn("Pods {} were not deleted.", podList.getItems());
-                        }
-                    } else {
-                        logger.warn("No pods found by label {}.", environmentLabel);
-                    }
-                });
+        // delete service
+        RetryPolicy<String> servicesRetryPolicy = getDestroyRetryPolicy("services-of-" + environmentLabel);
+        Failsafe.with(servicesRetryPolicy).with(executor).runAsync(() -> {
+            ServiceList serviceList = openShiftClient.services().withLabel("environment", environmentLabel).list();
+            if (serviceList != null) {
+                if (openShiftClient.services().delete(serviceList.getItems())) {
+                    logger.info("Services {} deleted.", serviceList.getItems());
+                } else {
+                    logger.warn("Services {} were not deleted.", serviceList.getItems());
+                }
+            } else {
+                logger.warn("No services found by label {}.", environmentLabel);
+            }
+        });
+        // delete pod
+        RetryPolicy<String> podsRetryPolicy = getDestroyRetryPolicy("pods-of-" + environmentLabel);
+        Failsafe.with(podsRetryPolicy).with(executor).runAsync(() -> {
+            PodList podList = openShiftClient.pods().withLabel("environment", environmentLabel).list();
+            if (podList != null) {
+                if (openShiftClient.pods().delete(podList.getItems())) {
+                    logger.info("Pods {} deleted.", podList.getItems());
+                } else {
+                    logger.warn("Pods {} were not deleted.", podList.getItems());
+                }
+            } else {
+                logger.warn("No pods found by label {}.", environmentLabel);
+            }
+        });
         return null;
     }
 
     private Void startMonitor(String serviceName, String podName, Request completionCallback, String sshPassword) {
-        CompletableFuture<String> serviceRunning = isServiceRunning(serviceName);
+        CompletableFuture<URI> serviceRunning = isServiceRunning(serviceName);
         activeMonitors.add(podName, serviceRunning);
 
         CompletableFuture<Void> podRunning = isPodRunning(podName);
         activeMonitors.add(podName, podRunning);
 
-        CompletableFuture.allOf(podRunning, serviceRunning)
-                .thenComposeAsync((nul) -> {
-                    String serviceIp = serviceRunning.join(); //future already completed (allOff)
-                    CompletableFuture<Void> pingFuture = pingBuildAgent(serviceName, serviceIp);
-                    activeMonitors.add(podName, pingFuture);
-                    return pingFuture.thenApply((n) -> serviceIp);
-                })
-                .handleAsync((serviceIp, throwable) -> {
-                    activeMonitors.remove(podName);
-                    if (throwable != null) {
-                        if (throwable instanceof CancellationException) {
-                            callback(completionCallback, EnvironmentCreationCompleted.cancelled());
-                        } else {
-                            callback(completionCallback, EnvironmentCreationCompleted.failed(throwable));
-                        }
-                    } else {
-                        EnvironmentCreationCompleted environmentCreationCompleted = EnvironmentCreationCompleted.success(
-                                getEnvironmentBaseUri(serviceIp),
-                                configuration.getWorkingDirectory(),
-                                sshPassword
-                        );
-                        callback(completionCallback, environmentCreationCompleted);
-                    }
-                    return null;
-                });
+        CompletableFuture.allOf(podRunning, serviceRunning).thenComposeAsync((nul) -> {
+            URI serviceUri = serviceRunning.join(); // future already completed (allOff)
+            CompletableFuture<HttpResponse<String>> pingFuture = pingBuildAgent(serviceUri);
+            activeMonitors.add(podName, pingFuture);
+            return pingFuture.thenApply((n) -> serviceUri);
+        }).handleAsync((serviceUri, throwable) -> {
+            activeMonitors.remove(podName);
+            if (throwable != null) {
+                if (throwable instanceof CancellationException) {
+                    callback(completionCallback, EnvironmentCreationCompleted.cancelled());
+                } else {
+                    callback(completionCallback, EnvironmentCreationCompleted.failed(throwable));
+                }
+            } else {
+                EnvironmentCreationCompleted environmentCreationCompleted = EnvironmentCreationCompleted
+                        .success(serviceUri, configuration.getWorkingDirectory(), sshPassword);
+                callback(completionCallback, environmentCreationCompleted);
+            }
+            return null;
+        });
         return null;
     }
 
     /**
      * Check if pod is in running state. If pod is in one of the failure statuses (as specified in POD_FAILED_STATUSES,
-     * {@link CompletableFuture} is compelted with {@link UnableToStartException}
+     * {@link CompletableFuture} is completed with {@link UnableToStartException}
      *
      * @return boolean: is pod running?
      */
@@ -424,83 +407,106 @@ public class Driver {
         RetryPolicy<String> retryPolicy = new RetryPolicy<String>()
                 .withMaxDuration(Duration.ofSeconds(configuration.getPodRunningWaitFor()))
                 .withBackoff(500, 5000, ChronoUnit.MILLIS)
-                .abortOn(UnableToStartException.class);
-        return Failsafe.with(retryPolicy)
-                .with(executor)
-                .runAsync(() -> {
-                    Pod pod = client.pods().withName(podName).get();
-                    String podStatus = pod.getStatus().getPhase();
-                    logger.debug("Pod {} status: {}", pod.getMetadata().getName(), podStatus);
-                    if (Arrays.asList(POD_FAILED_STATUSES).contains(podStatus)) {
-                        gaugeMetric.ifPresent(g -> g.incrementMetric(METRICS_POD_STARTED_FAILED_REASON_KEY + "." + podStatus));
-                        throw new UnableToStartException("Pod failed with status: " + podStatus);
-                    }
-                    boolean isRunning = "Running".equals(pod.getStatus().getPhase());
-                    if (isRunning) {
-                        logger.debug("Pod {} running.", pod.getMetadata().getName());
-                    } else {
-                        throw new DriverException("Pod is not running.");
-                    }
-                });
+                .abortOn(UnableToStartException.class)
+                .onSuccess(ctx -> logger.info("Pod is running: {}.", podName))
+                .onRetry(
+                        ctx -> logger.warn(
+                                "Pod {} running retry attempt #{}, last error: [{}].",
+                                podName,
+                                ctx.getAttemptCount(),
+                                ctx.getLastFailure().getMessage()))
+                .onFailure(ctx -> logger.error("Unable to start pod {}: {}.", podName, ctx.getFailure().getMessage()))
+                .onAbort(e -> logger.warn("IsPodRunning aborted. Pod {}: {}.", podName, e.getFailure().getMessage()));
+
+        return Failsafe.with(retryPolicy).with(executor).runAsync(() -> {
+            Pod pod = openShiftClient.pods().withName(podName).get();
+            String podStatus = pod.getStatus().getPhase();
+            logger.debug("Pod {} status: {}", pod.getMetadata().getName(), podStatus);
+            if (Arrays.asList(POD_FAILED_STATUSES).contains(podStatus)) {
+                gaugeMetric.ifPresent(g -> g.incrementMetric(METRICS_POD_STARTED_FAILED_REASON_KEY + "." + podStatus));
+                throw new UnableToStartException("Pod failed with status: " + podStatus);
+            }
+            boolean isRunning = "Running".equals(pod.getStatus().getPhase());
+            if (isRunning) {
+                logger.debug("Pod running: {}.", pod.getMetadata().getName());
+            } else {
+                throw new DriverException("Pod is not running.");
+            }
+        });
     }
 
-    private CompletableFuture<String> isServiceRunning(String serviceName) {
+    private CompletableFuture<URI> isServiceRunning(String serviceName) {
         RetryPolicy<Object> retryPolicy = new RetryPolicy<>()
                 .withMaxDuration(Duration.ofSeconds(configuration.getServiceRunningWaitFor()))
                 .withBackoff(500, 5000, ChronoUnit.MILLIS)
-                .onRetry(ctx -> logger.warn("Is service running retry attempt:{}, last error:{}",
-                                            ctx.getAttemptCount(),
-                                            ctx.getLastFailure()));
-        return Failsafe.with(retryPolicy)
-                .with(executor)
-                .getAsync(() -> {
-                    Service service = client.services().withName(serviceName).get();
-                    String clusterIP = service.getSpec().getClusterIP();
-                    if (clusterIP == null) {
-                        throw new DriverException("Service " + serviceName + " is not running.");
-                    } else {
-                        logger.info("Service {} ip: {}.",serviceName, clusterIP);
-                        return clusterIP;
-                    }
-                });
+                .onRetry(
+                        ctx -> logger.warn(
+                                "Is service running retry attempt:{}, last error:{}",
+                                ctx.getAttemptCount(),
+                                ctx.getLastFailure()));
+        return Failsafe.with(retryPolicy).with(executor).getAsync(() -> {
+            Service service = openShiftClient.services().withName(serviceName).get();
+            String clusterIP = service.getSpec().getClusterIP();
+            List<ServicePort> ports = service.getSpec().getPorts();
+            if (ports == null || ports.size() == 0) {
+                throw new DriverException("Service " + serviceName + " has no mapped ports.");
+            }
+            Integer clusterPort = ports.get(0).getPort(); // get the first port, there should be one only
+            if (clusterIP == null) {
+                throw new DriverException("Service " + serviceName + " is not running.");
+            } else {
+                logger.info("Service up: {} ip: {}.", serviceName, clusterIP);
+                return URI.create(
+                        configuration.getBuildAgentServiceScheme() + "://" + clusterIP + ":" + clusterPort + "/"
+                                + configuration.getBuildAgentBindPath());
+            }
+        });
     }
 
-    private CompletableFuture<Void> pingBuildAgent(String serviceName, String serviceIp) {
+    private CompletableFuture<HttpResponse<String>> pingBuildAgent(URI serviceUri) {
         HttpRequest.Builder builder = HttpRequest.newBuilder()
-                .uri(getEnvironmentBaseUri(serviceIp))
+                .uri(serviceUri.resolve(configuration.getBuildAgentPingPath()))
                 .method(Request.Method.HEAD.name(), HttpRequest.BodyPublishers.noBody())
                 .timeout(Duration.ofSeconds(configuration.getHttpClientRequestTimeout()));
         HttpRequest request = builder.build();
         RetryPolicy<HttpResponse<String>> retryPolicy = new RetryPolicy<HttpResponse<String>>()
-                .handleIf((response,throwable) -> throwable != null || !isHttpSuccess(response.statusCode()))
+                .handleIf((response, throwable) -> throwable != null || !isHttpSuccess(response.statusCode()))
                 .withMaxDuration(Duration.ofSeconds(configuration.getBuildAgentRunningWaitFor()))
                 .withBackoff(500, 2000, ChronoUnit.MILLIS)
-                .onRetry(ctx -> logger.warn("BuildAgent ping retry attempt:{}, last status:{}, last error:{}",
-                                            ctx.getAttemptCount(),
-                                            ctx.getLastResult().statusCode(),
-                                            ctx.getLastFailure()));
+                .onSuccess(
+                        ctx -> logger.info("BuildAgent responded, response status: {}.", ctx.getResult().statusCode()))
+                .onRetry(ctx -> {
+                    String lastError;
+                    if (ctx.getLastFailure() != null) {
+                        lastError = ctx.getLastFailure().getMessage();
+                    } else {
+                        lastError = "";
+                    }
+                    Integer lastStatus;
+                    if (ctx.getLastResult() != null) {
+                        lastStatus = ctx.getLastResult().statusCode();
+                    } else {
+                        lastStatus = null;
+                    }
+                    logger.warn(
+                            "BuildAgent ping retry attempt #{}, last error: [{}], last status: [{}].",
+                            ctx.getAttemptCount(),
+                            lastError,
+                            lastStatus);
+                })
+                .onFailure(ctx -> logger.error("Unable to ping BuildAgent: {}.", ctx.getFailure().getMessage()))
+                .onAbort(e -> logger.warn("BuildAgent ping aborted: {}.", e.getFailure().getMessage()));
+
+        logger.info("Scheduling BuildAgent ping to {} port: {} ...", request.uri());
         return Failsafe.with(retryPolicy)
                 .with(executor)
-                .getStageAsync(() -> httpClient.sendAsync(request, HttpResponse.BodyHandlers.ofString()))
-                .handleAsync((resp, t) -> {
-                    if (t != null) {
-                        logger.error("Unable to ping build agent: " + serviceName, t);
-                    } else {
-                        logger.info("Ping to {} responded with status: {}.", serviceName, resp.statusCode());
-                    }
-                    return null;
-                });
-    }
-
-    private URI getEnvironmentBaseUri(String serviceIp) {
-        return URI.create("https://" + serviceIp + "/"
-                + configuration.getBuildAgentBindPath());
+                .getStageAsync(() -> httpClient.sendAsync(request, HttpResponse.BodyHandlers.ofString()));
     }
 
     private void callback(Request callback, EnvironmentCreationCompleted environmentCreationCompleted) {
         String body;
         try {
-            body = mapper.writeValueAsString(environmentCreationCompleted);
+            body = jsonMapper.writeValueAsString(environmentCreationCompleted);
         } catch (JsonProcessingException e) {
             logger.error("Cannot serialize callback object.", e);
             body = "";
@@ -513,24 +519,34 @@ public class Driver {
         HttpRequest request = builder.build();
 
         RetryPolicy<HttpResponse<String>> retryPolicy = new RetryPolicy<HttpResponse<String>>()
-                .handleIf((response,throwable) -> throwable != null || !isHttpSuccess(response.statusCode()))
-                .withMaxDuration(Duration.ofSeconds(configuration.getCallbackRetryMaxDuration()))
+                .handleIf((response, throwable) -> throwable != null || !isHttpSuccess(response.statusCode()))
+                .withMaxDuration(Duration.ofSeconds(configuration.getCallbackRetryDuration()))
                 .withBackoff(500, 5000, ChronoUnit.MILLIS)
-                .onRetry(ctx -> logger.warn("Callback retry attempt:{}, last status:{}, last error:{}",
-                                            ctx.getAttemptCount(),
-                                            ctx.getLastResult().statusCode(),
-                                            ctx.getLastFailure()));
+                .onSuccess(ctx -> logger.info("Callback sent, response status: {}.", ctx.getResult().statusCode()))
+                .onRetry(ctx -> {
+                    String lastError;
+                    if (ctx.getLastFailure() != null) {
+                        lastError = ctx.getLastFailure().getMessage();
+                    } else {
+                        lastError = "";
+                    }
+                    Integer lastStatus;
+                    if (ctx.getLastResult() != null) {
+                        lastStatus = ctx.getLastResult().statusCode();
+                    } else {
+                        lastStatus = null;
+                    }
+                    logger.warn(
+                            "Callback retry attempt #{}, last error: [{}], last status: [{}].",
+                            ctx.getAttemptCount(),
+                            lastError,
+                            lastStatus);
+                })
+                .onFailure(ctx -> logger.error("Unable to send callback."))
+                .onAbort(e -> logger.warn("Callback aborted: {}.", e.getFailure().getMessage()));
         Failsafe.with(retryPolicy)
                 .with(executor)
-                .getStageAsync(() -> httpClient.sendAsync(request, HttpResponse.BodyHandlers.ofString()))
-                .handleAsync((resp, t) -> {
-                    if (t != null) {
-                        logger.error("Unable to send callback.", t);
-                    } else {
-                        logger.info("Callback sent, response status: {}.", resp.statusCode());
-                    }
-                    return null;
-                });
+                .getStageAsync(() -> httpClient.sendAsync(request, HttpResponse.BodyHandlers.ofString()));
     }
 
     private String getPodName(String environmentId) {
@@ -545,7 +561,8 @@ public class Driver {
         return "pnc-ba-ssh-" + environmentId;
     }
 
-    private void putMdcToResultMap(Map<String, String> result, Map<String, String> mdcMap, String mdcKey) throws DriverException {
+    private void putMdcToResultMap(Map<String, String> result, Map<String, String> mdcMap, String mdcKey)
+            throws DriverException {
         if (mdcMap == null) {
             throw new DriverException("Missing MDC map.");
         }
@@ -593,14 +610,14 @@ public class Driver {
     }
 
     private <T> T createModelNode(String resourceDefinition, Map<String, String> properties, Class<T> clazz) {
-        String definition = StringSubstitutor.replace(resourceDefinition, properties, "${", "}");
+        String definition = StringSubstitutor.replace(resourceDefinition, properties, "%{", "}");
 
         if (logger.isTraceEnabled()) {
             logger.trace("Node definition: {}", secureLog(definition));
         }
 
         try {
-            return mapper.readValue(definition, clazz);
+            return yamlMapper.readValue(definition, clazz);
         } catch (JsonProcessingException e) {
             throw new RuntimeException(e);
         }

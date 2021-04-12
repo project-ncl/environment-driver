@@ -17,12 +17,15 @@
  */
 package org.jboss.pnc.environmentdriver;
 
-import io.quarkus.arc.config.ConfigProperties;
+import javax.enterprise.context.ApplicationScoped;
+
 import lombok.Getter;
+import lombok.Setter;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 
 @Getter
-@ConfigProperties(prefix = "environment-driver")
+@Setter
+@ApplicationScoped
 public class Configuration {
 
     /**
@@ -30,93 +33,106 @@ public class Configuration {
      * Format: \<IPv4>:\<Port>(,\<IPv4>:\<Port>)+ You can set it to "all" and network isolation will be skipped, in case
      * of not setting it up at all all network traffic will be dropped
      */
-    protected String firewallAllowedDestinations;
+    @ConfigProperty(name = "environment-driver.firewall-allowed-destinations", defaultValue = "127.0.0.1")
+    String firewallAllowedDestinations;
 
     /**
      * Persistent http proxy hostname
      */
-    protected String proxyServer;
+    @ConfigProperty(name = "environment-driver.proxy-server")
+    String proxyServer;
 
     /**
      * Persistent http proxy port
      */
-    protected String proxyPort;
+    @ConfigProperty(name = "environment-driver.proxy-port")
+    String proxyPort;
 
     /**
      * List of hosts that are not proxied.
      */
-    protected String nonProxyHosts;
+    @ConfigProperty(name = "environment-driver.non-proxy-port", defaultValue = "localhost")
+    String nonProxyHosts;
 
     /**
      * Working directory on the remote environment
      */
-    protected String workingDirectory;
+    @ConfigProperty(name = "environment-driver.working-directory")
+    String workingDirectory;
 
-    protected String buildAgentHost;
-    protected String buildAgentBindPath;
+    @ConfigProperty(name = "environment-driver.build-agent.service-scheme", defaultValue = "http")
+    String buildAgentServiceScheme;
 
-    protected String containerPort;
+    @ConfigProperty(name = "environment-driver.build-agent.container-port")
+    String buildAgentContainerPort;
 
-    @ConfigProperty(defaultValue = "4")
-    protected int builderPodMemory;
+    @ConfigProperty(name = "environment-driver.build-agent.bind-path")
+    String buildAgentBindPath;
 
-    @ConfigProperty(defaultValue = "2222-ssh")
-    protected String sshServicePortName;
+    @ConfigProperty(name = "environment-driver.build-agent.ping-path", defaultValue = "")
+    String buildAgentPingPath;
 
-    protected String thisServiceBaseUrl;
+    @ConfigProperty(name = "environment-driver.build-agent.running-wait-for", defaultValue = "60")
+    long buildAgentRunningWaitFor;
 
-    @ConfigProperty(name = "openshift.namespace")
-    protected String openshiftNamespace;
+    @ConfigProperty(name = "environment-driver.builder-pod-memory", defaultValue = "4")
+    int builderPodMemory;
 
-    @ConfigProperty(name = "openshift.pod")
-    protected String podDefinition;
+    @ConfigProperty(name = "environment-driver.this-service-base-url")
+    String thisServiceBaseUrl;
 
-    @ConfigProperty(name = "openshift.service")
-    protected String serviceDefinition;
+    @ConfigProperty(name = "environment-driver.openshift.ssh-service-port-name", defaultValue = "2222-ssh")
+    String sshServicePortName;
 
-    @ConfigProperty(name = "openshift.ssh-service")
-    protected String sshServiceDefinition;
+    @ConfigProperty(name = "environment-driver.openshift.namespace")
+    String openshiftNamespace;
 
-    @ConfigProperty(name = "openshift.route")
-    protected String routeDefinition;
+    @ConfigProperty(name = "environment-driver.openshift.pod")
+    String podDefinition;
 
-    @ConfigProperty(name = "openshift.api.url")
-    protected String openshiftApiUrl;
+    @ConfigProperty(name = "environment-driver.openshift.service")
+    String serviceDefinition;
+
+    @ConfigProperty(name = "environment-driver.openshift.ssh-service")
+    String sshServiceDefinition;
+
+    @ConfigProperty(name = "environment-driver.openshift.route")
+    String routeDefinition;
+
+    @ConfigProperty(name = "environment-driver.openshift.api.url")
+    String openshiftApiUrl;
 
     /**
      * Openshift Api authentication token.
      */
-    @ConfigProperty(name = "openshift.api.token")
-    protected String openshiftApiToken;
+    @ConfigProperty(name = "environment-driver.openshift.api.token")
+    String openshiftApiToken;
 
-    @ConfigProperty(name = "openshift.client.connection-timeout", defaultValue = "5")
-    private int openshiftClientConnectionTimeout;
+    @ConfigProperty(name = "environment-driver.openshift.client.connection-timeout", defaultValue = "5")
+    int openshiftClientConnectionTimeout;
 
-    @ConfigProperty(name = "openshift.client.request-timeout", defaultValue = "15")
-    private int openshiftClientRequestTimeout;
+    @ConfigProperty(name = "environment-driver.openshift.client.request-timeout", defaultValue = "15")
+    int openshiftClientRequestTimeout;
 
-    @ConfigProperty(name = "http.connect-timeout", defaultValue = "5")
-    private int httpClientConnectTimeout;
+    @ConfigProperty(name = "environment-driver.http-client.connect-timeout", defaultValue = "5")
+    int httpClientConnectTimeout;
 
-    @ConfigProperty(name = "http.request-timeout", defaultValue = "15")
-    private int httpClientRequestTimeout;
+    @ConfigProperty(name = "environment-driver.http-client.request-timeout", defaultValue = "15")
+    int httpClientRequestTimeout;
 
-    @ConfigProperty(name = "ssh-ping.retry-duration", defaultValue = "15")
-    private int sshPingRetryMaxDuration;
+    @ConfigProperty(name = "environment-driver.ssh-ping-retry-duration", defaultValue = "15")
+    int sshPingRetryDuration;
 
-    @ConfigProperty(name = "destroy.retry-duration", defaultValue = "3600")
-    private long destroyRetryMaxDuration;
+    @ConfigProperty(name = "environment-driver.destroy-retry-duration", defaultValue = "3600")
+    long destroyRetryDuration;
 
-    @ConfigProperty(name = "pod-running.wait-for", defaultValue = "300")
-    private long podRunningWaitFor;
+    @ConfigProperty(name = "environment-driver.pod-running-wait-for", defaultValue = "300")
+    long podRunningWaitFor;
 
-    @ConfigProperty(name = "service-running.wait-for", defaultValue = "30")
-    private long serviceRunningWaitFor;
+    @ConfigProperty(name = "environment-driver.service-running-wait-for", defaultValue = "30")
+    long serviceRunningWaitFor;
 
-    @ConfigProperty(name = "build-agent-running.wait-for", defaultValue = "15")
-    private long buildAgentRunningWaitFor;
-
-    @ConfigProperty(name = "callback.max-duration", defaultValue = "60")
-    private long callbackRetryMaxDuration;
+    @ConfigProperty(name = "environment-driver.callback-retry-duration", defaultValue = "300")
+    long callbackRetryDuration;
 
 }

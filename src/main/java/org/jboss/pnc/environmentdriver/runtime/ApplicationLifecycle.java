@@ -32,10 +32,10 @@ import org.jboss.pnc.common.concurrent.Sequence;
 @ApplicationScoped
 public class ApplicationLifecycle {
 
-    @ConfigProperty(name = "sequenceGenerator.nodeId", defaultValue = "-1") //nodeId + nodeIdOffset must be < 1024
+    @ConfigProperty(name = "sequenceGenerator.nodeId", defaultValue = "-1") // nodeId + nodeIdOffset must be < 1024
     int nodeId;
 
-    @ConfigProperty(name = "sequenceGenerator.nodeIdOffset", defaultValue = "0") //nodeId + nodeIdOffset must be < 1024
+    @ConfigProperty(name = "sequenceGenerator.nodeIdOffset", defaultValue = "0") // nodeId + nodeIdOffset must be < 1024
     int nodeIdOffset;
 
     void onStart(@Observes StartupEvent event) {
