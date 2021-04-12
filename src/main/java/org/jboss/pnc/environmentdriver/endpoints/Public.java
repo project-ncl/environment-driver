@@ -54,7 +54,7 @@ public class Public {
 
     /**
      * Create new build environment for a given configuration. EnvironmentId which is created based on
-     * {@link CreateRequest#getEnvironmentLabel()} is returned.
+     * {@link CreateRequest#getEnvironmentLabel()} is returned. The method
      */
     @Authenticated
     @POST
@@ -65,7 +65,7 @@ public class Public {
     }
 
     /**
-     * Based on the {@link CompleteRequest#isEnableDebug()} value destroys the environemnt or enables the ssh connection
+     * Based on the {@link CompleteRequest#isEnableDebug()} value destroys the environment or enables the ssh connection
      * to the environment.
      *
      */

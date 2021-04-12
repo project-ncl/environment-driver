@@ -50,19 +50,17 @@ import io.fabric8.kubernetes.api.model.ServiceList;
 import io.fabric8.kubernetes.api.model.ServicePort;
 import io.fabric8.openshift.api.model.Route;
 import io.fabric8.openshift.client.OpenShiftClient;
-import io.undertow.util.Headers;
 import net.jodah.failsafe.Failsafe;
 import net.jodah.failsafe.RetryPolicy;
 import org.apache.commons.lang3.RandomStringUtils;
 import org.apache.commons.text.StringSubstitutor;
 import org.eclipse.microprofile.context.ManagedExecutor;
 import org.eclipse.microprofile.jwt.JsonWebToken;
-import org.jboss.pnc.api.constants.MDCKeys;
+import org.jboss.pnc.api.constants.HttpHeaders;
+import org.jboss.pnc.api.constants.MDCHeaderKeys;
 import org.jboss.pnc.api.dto.Request;
-import org.jboss.pnc.buildagent.common.RandomUtils;
-import org.jboss.pnc.buildagent.common.StringUtils;
+import org.jboss.pnc.common.Random;
 import org.jboss.pnc.common.Strings;
-import org.jboss.pnc.common.constants.MDCHeaderKeys;
 import org.jboss.pnc.environmentdriver.dto.CompleteResponse;
 import org.jboss.pnc.environmentdriver.dto.CreateRequest;
 import org.jboss.pnc.environmentdriver.dto.CreateResponse;
@@ -132,15 +130,15 @@ public class Driver {
      * @return CompletionStage which is completed when all required requests to the Openshift complete.
      */
     public CompletionStage<CreateResponse> create(CreateRequest createRequest) {
-        String environmentId = createRequest.getEnvironmentLabel() + "-" + RandomUtils.randString(6);
+        String environmentId = createRequest.getEnvironmentLabel() + "-" + Random.randString(6);
 
         String podName = getPodName(environmentId);
         String serviceName = getServiceName(environmentId);
 
         Map<String, String> environmentVariables = new HashMap<>();
 
-        boolean proxyActive = !StringUtils.isEmpty(configuration.getProxyServer())
-                && !StringUtils.isEmpty(configuration.getProxyPort());
+        boolean proxyActive = !Strings.isEmpty(configuration.getProxyServer())
+                && !Strings.isEmpty(configuration.getProxyPort());
 
         environmentVariables.put("image", createRequest.getImageId());
         environmentVariables.put("firewallAllowedDestinations", configuration.getFirewallAllowedDestinations());
@@ -565,23 +563,23 @@ public class Driver {
         return "pnc-ba-ssh-" + environmentId;
     }
 
-    private void putMdcToResultMap(Map<String, String> result, Map<String, String> mdcMap, String mdcKey)
+    private void putMdcToResultMap(Map<String, String> result, Map<String, String> mdcMap, MDCHeaderKeys mdcHeaderKeys)
             throws DriverException {
         if (mdcMap == null) {
             throw new DriverException("Missing MDC map.");
         }
-        if (mdcMap.get(mdcKey) != null) {
-            result.put("log-" + mdcKey, mdcMap.get(mdcKey));
+        if (mdcMap.get(mdcHeaderKeys.getMdcKey()) != null) {
+            result.put(mdcHeaderKeys.getHeaderName(), mdcMap.get(mdcHeaderKeys.getMdcKey()));
         } else {
-            throw new DriverException("Missing MDC value " + mdcKey);
+            throw new DriverException("Missing MDC value " + mdcHeaderKeys.getMdcKey());
         }
     }
 
     private List<Request.Header> getHeaders() {
         List<Request.Header> headers = new ArrayList<>();
-        headers.add(new Request.Header(Headers.CONTENT_TYPE_STRING, MediaType.APPLICATION_JSON));
+        headers.add(new Request.Header(HttpHeaders.CONTENT_TYPE_STRING, MediaType.APPLICATION_JSON));
         if (webToken.getRawToken() != null) {
-            headers.add(new Request.Header(Headers.AUTHORIZATION_STRING, "Bearer " + webToken.getRawToken()));
+            headers.add(new Request.Header(HttpHeaders.AUTHORIZATION_STRING, "Bearer " + webToken.getRawToken()));
         }
         headersFromMdc(headers, MDCHeaderKeys.REQUEST_CONTEXT);
         headersFromMdc(headers, MDCHeaderKeys.PROCESS_CONTEXT);
@@ -638,10 +636,10 @@ public class Driver {
     private Map<String, String> mdcToMap() throws DriverException {
         Map<String, String> result = new HashMap<>();
         Map<String, String> mdcMap = MDC.getCopyOfContextMap();
-        putMdcToResultMap(result, mdcMap, MDCKeys.PROCESS_CONTEXT_KEY);
-        putMdcToResultMap(result, mdcMap, MDCKeys.TMP_KEY);
-        putMdcToResultMap(result, mdcMap, MDCKeys.EXP_KEY);
-        putMdcToResultMap(result, mdcMap, MDCKeys.USER_ID_KEY);
+        putMdcToResultMap(result, mdcMap, MDCHeaderKeys.PROCESS_CONTEXT);
+        putMdcToResultMap(result, mdcMap, MDCHeaderKeys.TMP);
+        putMdcToResultMap(result, mdcMap, MDCHeaderKeys.EXP);
+        putMdcToResultMap(result, mdcMap, MDCHeaderKeys.USER_ID);
         return result;
     }
 

@@ -30,7 +30,6 @@ import io.undertow.server.HttpHandler;
 import io.undertow.servlet.api.DeploymentInfo;
 import io.undertow.servlet.api.DeploymentManager;
 import io.undertow.servlet.api.InstanceFactory;
-import org.jboss.pnc.buildagent.server.BootstrapUndertow;
 
 import static io.undertow.servlet.Servlets.defaultContainer;
 import static io.undertow.servlet.Servlets.deployment;
@@ -45,7 +44,7 @@ public class HttpServer {
     private Map<Class<? extends Servlet>, InstanceFactory<? extends Servlet>> servlets = new HashMap<>();
 
     public void start(int port, String host) throws ServletException, NoSuchAlgorithmException {
-        DeploymentInfo servletBuilder = deployment().setClassLoader(BootstrapUndertow.class.getClassLoader())
+        DeploymentInfo servletBuilder = deployment().setClassLoader(HttpServer.class.getClassLoader())
                 .setContextPath("/")
                 .setDeploymentName("ROOT.war");
 
