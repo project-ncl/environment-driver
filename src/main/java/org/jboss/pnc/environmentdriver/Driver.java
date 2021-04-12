@@ -72,7 +72,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
 
+import static org.jboss.pnc.environmentdriver.Constants.METRICS_POD_STARTED_FAILED_KEY;
 import static org.jboss.pnc.environmentdriver.Constants.METRICS_POD_STARTED_FAILED_REASON_KEY;
+import static org.jboss.pnc.environmentdriver.Constants.METRICS_POD_STARTED_SUCCESS_KEY;
 
 /**
  * @author <a href="mailto:matejonnet@gmail.com">Matej Lazar</a>
@@ -386,11 +388,13 @@ public class Driver {
                     callback(completionCallback, EnvironmentCreationCompleted.cancelled());
                 } else {
                     callback(completionCallback, EnvironmentCreationCompleted.failed(throwable));
+                    gaugeMetric.ifPresent(g -> g.incrementMetric(METRICS_POD_STARTED_FAILED_KEY));
                 }
             } else {
                 EnvironmentCreationCompleted environmentCreationCompleted = EnvironmentCreationCompleted
                         .success(serviceUri, configuration.getWorkingDirectory(), sshPassword);
                 callback(completionCallback, environmentCreationCompleted);
+                gaugeMetric.ifPresent(g -> g.incrementMetric(METRICS_POD_STARTED_SUCCESS_KEY));
             }
             return null;
         });
