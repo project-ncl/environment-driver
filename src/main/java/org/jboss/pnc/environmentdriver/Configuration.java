@@ -78,7 +78,7 @@ public class Configuration {
     @ConfigProperty(name = "environment-driver.builder-pod-memory", defaultValue = "4")
     int builderPodMemory;
 
-    @ConfigProperty(name = "environment-driver.this-service-base-url")
+    @ConfigProperty(name = "environment-driver.self-base-url")
     String thisServiceBaseUrl;
 
     @ConfigProperty(name = "environment-driver.openshift.ssh-service-port-name", defaultValue = "2222-ssh")
