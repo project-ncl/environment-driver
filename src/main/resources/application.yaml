@@ -7,7 +7,11 @@ quarkus:
         level: DEBUG
     console:
       format: "%d{HH:mm:ss,SSS} %-5p [%c{3.}] (%t) %s%e mdc:[%X]%n"
-  oidc:
+#  kubernetes-client:
+    #namespace: default
+    #master-url: https://opeshift-host.com/
+    #token: secretToken
+oidc:
     auth-server-url: https://keycloak-host/auth/realms/pncredhat
     client-id: client
     credentials:
@@ -27,10 +31,6 @@ environment-driver:
     container-port: 8080
   self-base-url: http://localhost:8081/
   openshift:
-    namespace: my-namespace
-    api:
-      url: https://opeshift-host.com/
-      token: secretToken
     pod: |
       kind: Pod
       apiVersion: v1
@@ -155,4 +155,87 @@ environment-driver:
       request-timeout: 3
     build-agent:
       ping-path: PingHandler
+    openshift:
+      pod: |
+        kind: Pod
+        apiVersion: v1
+        metadata:
+          name: "%{pod-name}"
+          labels:
+            pnc-build-agent-pod: "%{pod-name}"
+            environment: "%{environment-label}"
+        status:
+          phase: Running
+        spec:
+          nodeSelector:
+            acceptpncbuildagent: 'true'
+          containers:
+            - name: pnc-build-agent-container
+              image: "%{image}"
+              ports:
+                - name: http
+                  containerPort: %{containerPort}
+                  protocol: TCP
+              env:
+                - name: firewallAllowedDestinations
+                  value: "%{firewallAllowedDestinations}"
+                - name: allowedHttpOutgoingDestinations
+                  value: "%{allowedHttpOutgoingDestinations}"
+                - name: isHttpActive
+                  value: "%{isHttpActive}"
+                - name: proxyServer
+                  value: "%{proxyServer}"
+                - name: proxyPort
+                  value: "%{proxyPort}"
+                - name: nonProxyHosts
+                  value: "%{nonProxyHosts}"
+                - name: proxyUsername
+                  value: "%{proxyUsername}"
+                - name: AProxDependencyUrl
+                  value: "%{AProxDependencyUrl}"
+                - name: AProxDeployUrl
+                  value: "%{AProxDeployUrl}"
+                - name: buildAgentContextPath
+                  value: "%{buildAgentContextPath}"
+                - name: buildAgentBindPort
+                  value: "%{containerPort}"
+                - name: workerUserPassword
+                  value: "%{workerUserPassword}"
+                - name: accessToken
+                  value: "%{accessToken}"
+                - name: logUserId
+                  value: "%{logUserId}"
+                - name: logProcessContext
+                  value: "%{logProcessContext}"
+                - name: buildContentId
+                  value: "%{buildContentId}"
+                - name: buildAgentArguments
+                  value: "-b 0.0.0.0 -p %{containerPort} -pl FILE -l /tmp -c %{buildAgentContextPath}"
+                - name: buildAgentJvmProperties
+                  value: "-DlogMDC=processContext:%{logProcessContext};tmp:%{tempBuild};exp:%{expiresDate}"
+              resources:
+              terminationMessagePath: "/dev/termination-log"
+              imagePullPolicy: Always
+              securityContext:
+                capabilities:
+                  add:
+                    - NET_ADMIN
+          restartPolicy: Never
+          activeDeadlineSeconds: 28800
+          dnsPolicy: ClusterFirst
+      service: |
+        kind: Service
+        apiVersion: v1
+        metadata:
+          name: "%{service-name}"
+          labels:
+            environment: "%{environment-label}"
+        spec:
+          ports:
+            - name: 8080-tcp
+              protocol: TCP
+              port: 8082
+              targetPort: %{containerPort}
+              nodePort: 0
+          clusterIP: 127.0.0.1
 

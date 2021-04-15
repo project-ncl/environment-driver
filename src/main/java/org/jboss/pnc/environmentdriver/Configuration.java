@@ -17,7 +17,7 @@
  */
 package org.jboss.pnc.environmentdriver;
 
-import javax.enterprise.context.ApplicationScoped;
+import javax.enterprise.context.Dependent;
 
 import lombok.Getter;
 import lombok.Setter;
@@ -25,7 +25,7 @@ import org.eclipse.microprofile.config.inject.ConfigProperty;
 
 @Getter
 @Setter
-@ApplicationScoped
+@Dependent
 public class Configuration {
 
     /**
@@ -84,9 +84,6 @@ public class Configuration {
     @ConfigProperty(name = "environment-driver.openshift.ssh-service-port-name", defaultValue = "2222-ssh")
     String sshServicePortName;
 
-    @ConfigProperty(name = "environment-driver.openshift.namespace")
-    String openshiftNamespace;
-
     @ConfigProperty(name = "environment-driver.openshift.pod")
     String podDefinition;
 
@@ -98,21 +95,6 @@ public class Configuration {
 
     @ConfigProperty(name = "environment-driver.openshift.route")
     String routeDefinition;
-
-    @ConfigProperty(name = "environment-driver.openshift.api.url")
-    String openshiftApiUrl;
-
-    /**
-     * Openshift Api authentication token.
-     */
-    @ConfigProperty(name = "environment-driver.openshift.api.token")
-    String openshiftApiToken;
-
-    @ConfigProperty(name = "environment-driver.openshift.client.connection-timeout", defaultValue = "5")
-    int openshiftClientConnectionTimeout;
-
-    @ConfigProperty(name = "environment-driver.openshift.client.request-timeout", defaultValue = "15")
-    int openshiftClientRequestTimeout;
 
     @ConfigProperty(name = "environment-driver.http-client.connect-timeout", defaultValue = "5")
     int httpClientConnectTimeout;

@@ -313,7 +313,7 @@ public class Driver {
                 logger.warn("Pod {} does not exists.", podName);
             }
         });
-        return null;
+        return CompletableFuture.completedFuture(null);
     }
 
     private RetryPolicy<String> getDestroyRetryPolicy(String resourceName) {

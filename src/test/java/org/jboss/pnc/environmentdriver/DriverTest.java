@@ -40,7 +40,8 @@ import io.quarkus.test.junit.QuarkusMock;
 import io.quarkus.test.junit.QuarkusTest;
 import io.quarkus.test.security.TestSecurity;
 import io.restassured.RestAssured;
-import io.undertow.util.Headers;
+import org.eclipse.microprofile.config.ConfigProvider;
+import org.jboss.pnc.api.constants.HttpHeaders;
 import org.jboss.pnc.api.constants.MDCHeaderKeys;
 import org.jboss.pnc.api.dto.Request;
 import org.jboss.pnc.environmentdriver.dto.CreateRequest;
@@ -108,12 +109,11 @@ public class DriverTest {
     @Test
     @Timeout(15)
     public void shouldCreateEnvironmentAndSendCompletionCallback() throws URISyntaxException, InterruptedException {
-        mockOpenShiftClient(false, false);
-
         Request callbackRequest = new Request(
                 Request.Method.POST,
                 new URI("http://localhost:8082/" + CallbackHandler.class.getSimpleName()),
-                Collections.singletonList(new Request.Header(Headers.CONTENT_TYPE_STRING, MediaType.APPLICATION_JSON)));
+                Collections.singletonList(
+                        new Request.Header(HttpHeaders.CONTENT_TYPE_STRING, MediaType.APPLICATION_JSON)));
 
         // when create the environment
         CreateRequest request = CreateRequest.builder()
@@ -131,78 +131,125 @@ public class DriverTest {
                 .body()
                 .as(CreateResponse.class);
 
-        logger.info("Environment id: {}", createResponse.getEnvironmentId());
+        String environmentId = createResponse.getEnvironmentId();
+        logger.info("Environment id: {}", environmentId);
 
         // then
-        Assertions.assertTrue(createResponse.getEnvironmentId().contains("env1"));
+        Assertions.assertTrue(environmentId.contains("env1"));
         Request callback = callbackRequests.take();
         EnvironmentCreationCompleted creationCompleted = mapper
                 .convertValue(callback.getAttachment(), EnvironmentCreationCompleted.class);
         logger.info("Environment creation completed with status: {}", creationCompleted.getStatus());
         Assertions.assertEquals(SUCCESS, creationCompleted.getStatus(), "Unexpected environment creation status.");
         Assertions.assertEquals(2, pingRequests.size(), "Unexpected number of received pings.");
-    }
 
-    @Test
-    @Timeout(5)
-    public void shouldFailCreateRequest() throws URISyntaxException, InterruptedException {
-        mockOpenShiftClient(true, false);
-
-        Request callbackRequest = new Request(
-                Request.Method.POST,
-                new URI("http://localhost:8082/" + CallbackHandler.class.getSimpleName()),
-                Collections.singletonList(new Request.Header(Headers.CONTENT_TYPE_STRING, MediaType.APPLICATION_JSON)));
-
-        // when create the environment
-        CreateRequest request = CreateRequest.builder()
+        // clean up
+        CreateRequest destroyRequest = CreateRequest.builder()
                 .environmentLabel("env1")
                 .completionCallback(callbackRequest)
                 .build();
         given().contentType(MediaType.APPLICATION_JSON)
                 .headers(requestHeaders())
-                .body(request)
+                .body(destroyRequest)
                 .when()
-                .post("/create")
-                .then()
-                .statusCode(500);
-    }
-
-    @Test
-    @Timeout(15)
-    public void shouldCallbackWithFaileResultWhenBuildAgentPingFails() throws URISyntaxException, InterruptedException {
-        mockOpenShiftClient(false, true);
-
-        Request callbackRequest = new Request(
-                Request.Method.POST,
-                new URI("http://localhost:8082/" + CallbackHandler.class.getSimpleName()),
-                Collections.singletonList(new Request.Header(Headers.CONTENT_TYPE_STRING, MediaType.APPLICATION_JSON)));
-
-        // when create the environment
-        CreateRequest request = CreateRequest.builder()
-                .environmentLabel("env1")
-                .completionCallback(callbackRequest)
-                .build();
-        CreateResponse createResponse = given().contentType(MediaType.APPLICATION_JSON)
-                .headers(requestHeaders())
-                .body(request)
-                .when()
-                .post("/create")
+                .put("/cancel/" + environmentId)
                 .then()
                 .statusCode(200)
                 .extract()
                 .body()
                 .as(CreateResponse.class);
 
-        logger.info("Environment id: {}", createResponse.getEnvironmentId());
+    }
 
-        // then
-        Request callback = callbackRequests.take();
-        EnvironmentCreationCompleted creationCompleted = mapper
-                .convertValue(callback.getAttachment(), EnvironmentCreationCompleted.class);
-        logger.info("Environment creation completed with status: {}", creationCompleted.getStatus());
-        Assertions.assertEquals(FAILED, creationCompleted.getStatus(), "Unexpected environment creation status.");
-        logger.info("CreationCompleted.message: [{}]", creationCompleted.getMessage());
-        Assertions.assertEquals(0, pingRequests.size(), "Unexpected number of received pings.");
+    @Test
+    @Timeout(10)
+    public void shouldFailCreateRequest() throws URISyntaxException, InterruptedException {
+        String originalPod = ConfigProvider.getConfig().getValue("environment-driver.openshift.pod", String.class);
+        System.setProperty("environment-driver.openshift.pod", "unparsable");
+        try {
+            Request callbackRequest = new Request(
+                    Request.Method.POST,
+                    new URI("http://localhost:8082/" + CallbackHandler.class.getSimpleName()),
+                    Collections.singletonList(
+                            new Request.Header(HttpHeaders.CONTENT_TYPE_STRING, MediaType.APPLICATION_JSON)));
+
+            // when create the environment
+            CreateRequest request = CreateRequest.builder()
+                    .environmentLabel("env1")
+                    .completionCallback(callbackRequest)
+                    .build();
+            given().contentType(MediaType.APPLICATION_JSON)
+                    .headers(requestHeaders())
+                    .body(request)
+                    .when()
+                    .post("/create")
+                    .then()
+                    .statusCode(500);
+
+        } finally {
+            System.setProperty("environment-driver.openshift.pod", originalPod);
+        }
+    }
+
+    @Test
+    @Timeout(15)
+    public void shouldCallbackWithFaileResultWhenBuildAgentPingFails() throws URISyntaxException, InterruptedException {
+        String originalService = ConfigProvider.getConfig()
+                .getValue("environment-driver.openshift.service", String.class);
+        System.setProperty("environment-driver.openshift.service", originalService.replace("127.0.0.1", "127.1.2.3"));
+        try {
+            Request callbackRequest = new Request(
+                    Request.Method.POST,
+                    new URI("http://localhost:8082/" + CallbackHandler.class.getSimpleName()),
+                    Collections.singletonList(
+                            new Request.Header(HttpHeaders.CONTENT_TYPE_STRING, MediaType.APPLICATION_JSON)));
+
+            // when create the environment
+            CreateRequest request = CreateRequest.builder()
+                    .environmentLabel("env1")
+                    .completionCallback(callbackRequest)
+                    .build();
+            CreateResponse createResponse = given().contentType(MediaType.APPLICATION_JSON)
+                    .headers(requestHeaders())
+                    .body(request)
+                    .when()
+                    .post("/create")
+                    .then()
+                    .statusCode(200)
+                    .extract()
+                    .body()
+                    .as(CreateResponse.class);
+
+            String environmentId = createResponse.getEnvironmentId();
+            logger.info("Environment id: {}", environmentId);
+
+            // then
+            Request callback = callbackRequests.take();
+            EnvironmentCreationCompleted creationCompleted = mapper
+                    .convertValue(callback.getAttachment(), EnvironmentCreationCompleted.class);
+            logger.info("Environment creation completed with status: {}", creationCompleted.getStatus());
+            Assertions.assertEquals(FAILED, creationCompleted.getStatus(), "Unexpected environment creation status.");
+            logger.info("CreationCompleted.message: [{}]", creationCompleted.getMessage());
+            Assertions.assertEquals(0, pingRequests.size(), "Unexpected number of received pings.");
+
+            // clean up
+            CreateRequest destroyRequest = CreateRequest.builder()
+                    .environmentLabel("env1")
+                    .completionCallback(callbackRequest)
+                    .build();
+            given().contentType(MediaType.APPLICATION_JSON)
+                    .headers(requestHeaders())
+                    .body(destroyRequest)
+                    .when()
+                    .put("/cancel/" + environmentId)
+                    .then()
+                    .statusCode(200)
+                    .extract()
+                    .body()
+                    .as(CreateResponse.class);
+        } finally {
+            System.setProperty("environment-driver.openshift.service", originalService);
+        }
     }
 
     private void mockOpenShiftClient(boolean failToRequestNewPod, boolean invalidServiceAddress) {
