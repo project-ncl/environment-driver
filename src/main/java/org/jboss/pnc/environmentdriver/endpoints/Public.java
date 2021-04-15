@@ -53,8 +53,8 @@ public class Public {
     Driver driver;
 
     /**
-     * Create new build environment for a given configuration.
-     * EnvironmentId which is created based on {@link CreateRequest#getEnvironmentLabel()} is returned.
+     * Create new build environment for a given configuration. EnvironmentId which is created based on
+     * {@link CreateRequest#getEnvironmentLabel()} is returned. The method
      */
     @Authenticated
     @POST
@@ -65,7 +65,8 @@ public class Public {
     }
 
     /**
-     * Based on the {@link CompleteRequest#isEnableDebug()} value destroys the environemnt or enables the ssh connection to the environment.
+     * Based on the {@link CompleteRequest#isEnableDebug()} value destroys the environment or enables the ssh connection
+     * to the environment.
      *
      */
     @Authenticated
@@ -76,12 +77,14 @@ public class Public {
         if (completeRequest.isEnableDebug()) {
             return driver.enableDebug(completeRequest.getEnvironmentId());
         } else {
-            return driver.destroyAll(completeRequest.getEnvironmentLabel()).thenApply(nul -> new CompleteResponse(null, -1));
+            return driver.destroyAll(completeRequest.getEnvironmentLabel())
+                    .thenApply(nul -> new CompleteResponse(null, -1));
         }
     }
 
     /**
-     * The complete request have to hit the same service instance as create to cancel potentially active create operations.
+     * The complete request have to hit the same service instance as create to cancel potentially active create
+     * operations.
      */
     @Authenticated
     @PUT

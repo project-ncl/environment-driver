@@ -18,14 +18,10 @@
 
 package org.jboss.pnc.environmentdriver.runtime;
 
-import io.quarkus.security.identity.SecurityIdentity;
-import org.jboss.pnc.common.Strings;
-import org.jboss.pnc.common.concurrent.Sequence;
-import org.jboss.pnc.common.constants.MDCHeaderKeys;
-import org.jboss.pnc.common.constants.MDCKeys;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.slf4j.MDC;
+import java.io.IOException;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.function.Supplier;
 
 import javax.inject.Inject;
 import javax.ws.rs.container.ContainerRequestContext;
@@ -35,10 +31,15 @@ import javax.ws.rs.container.ContainerResponseFilter;
 import javax.ws.rs.core.Request;
 import javax.ws.rs.core.UriInfo;
 import javax.ws.rs.ext.Provider;
-import java.io.IOException;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.function.Supplier;
+
+import io.quarkus.security.identity.SecurityIdentity;
+import org.jboss.pnc.api.constants.MDCHeaderKeys;
+import org.jboss.pnc.api.constants.MDCKeys;
+import org.jboss.pnc.common.Strings;
+import org.jboss.pnc.common.concurrent.Sequence;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
 
 /**
  * @author <a href="mailto:matejonnet@gmail.com">Matej Lazar</a>

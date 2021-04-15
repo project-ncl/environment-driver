@@ -7,7 +7,11 @@ quarkus:
         level: DEBUG
     console:
       format: "%d{HH:mm:ss,SSS} %-5p [%c{3.}] (%t) %s%e mdc:[%X]%n"
-  oidc:
+#  kubernetes-client:
+    #namespace: default
+    #master-url: https://opeshift-host.com/
+    #token: secretToken
+oidc:
     auth-server-url: https://keycloak-host/auth/realms/pncredhat
     client-id: client
     credentials:
@@ -19,62 +23,69 @@ quarkus:
         enable: false
 
 environment-driver:
+  proxy-server: http-proxy-host
+  proxy-port: 8080
+  working-directory: /tmp
+  build-agent:
+    bind-path: /
+    container-port: 8080
+  self-base-url: http://localhost:8081/
   openshift:
     pod: |
       kind: Pod
       apiVersion: v1
       metadata:
-        name: "${pod-name}"
+        name: "%{pod-name}"
         labels:
-          pnc-build-agent-pod: "${pod-name}"
-          environment: "${environment-label}"
+          pnc-build-agent-pod: "%{pod-name}"
+          environment: "%{environment-label}"
       spec:
         nodeSelector:
           acceptpncbuildagent: 'true'
         containers:
           - name: pnc-build-agent-container
-            image: "${image}"
+            image: "%{image}"
             ports:
               - name: http
-                containerPort: ${containerPort}
+                containerPort: %{containerPort}
                 protocol: TCP
             env:
               - name: firewallAllowedDestinations
-                value: "${firewallAllowedDestinations}"
+                value: "%{firewallAllowedDestinations}"
               - name: allowedHttpOutgoingDestinations
-                value: "${allowedHttpOutgoingDestinations}"
+                value: "%{allowedHttpOutgoingDestinations}"
               - name: isHttpActive
-                value: "${isHttpActive}"
+                value: "%{isHttpActive}"
               - name: proxyServer
-                value: "${proxyServer}"
+                value: "%{proxyServer}"
               - name: proxyPort
-                value: "${proxyPort}"
+                value: "%{proxyPort}"
               - name: nonProxyHosts
-                value: "${nonProxyHosts}"
+                value: "%{nonProxyHosts}"
               - name: proxyUsername
-                value: "${proxyUsername}"
+                value: "%{proxyUsername}"
               - name: AProxDependencyUrl
-                value: "${AProxDependencyUrl}"
+                value: "%{AProxDependencyUrl}"
               - name: AProxDeployUrl
-                value: "${AProxDeployUrl}"
+                value: "%{AProxDeployUrl}"
               - name: buildAgentContextPath
-                value: "${buildAgentContextPath}"
+                value: "%{buildAgentContextPath}"
               - name: buildAgentBindPort
-                value: "${containerPort}"
+                value: "%{containerPort}"
               - name: workerUserPassword
-                value: "${workerUserPassword}"
+                value: "%{workerUserPassword}"
               - name: accessToken
-                value: "${accessToken}"
+                value: "%{accessToken}"
               - name: logUserId
-                value: "${logUserId}"
+                value: "%{logUserId}"
               - name: logProcessContext
-                value: "${logProcessContext}"
+                value: "%{logProcessContext}"
               - name: buildContentId
-                value: "${buildContentId}"
+                value: "%{buildContentId}"
               - name: buildAgentArguments
-                value: "-b 0.0.0.0 -p ${containerPort} -pl FILE -l /tmp -c ${buildAgentContextPath}"
+                value: "-b 0.0.0.0 -p %{containerPort} -pl FILE -l /tmp -c %{buildAgentContextPath}"
               - name: buildAgentJvmProperties
-                value: "-DlogMDC=processContext:${logProcessContext};tmp:${tempBuild};exp:${expiresDate}"
+                value: "-DlogMDC=processContext:%{logProcessContext};tmp:%{tempBuild};exp:%{expiresDate}"
             resources:
             terminationMessagePath: "/dev/termination-log"
             imagePullPolicy: Always
@@ -89,27 +100,27 @@ environment-driver:
       kind: Service
       apiVersion: v1
       metadata:
-        name: "${service-name}"
+        name: "%{service-name}"
         labels:
-          environment: "${environment-label}"
+          environment: "%{environment-label}"
       spec:
         ports:
           - name: 8080-tcp
             protocol: TCP
             port: 80
-            targetPort: ${containerPort}
+            targetPort: %{containerPort}
             nodePort: 0
         selector:
-          pnc-build-agent-pod: "${pod-name}"
+          pnc-build-agent-pod: "%{pod-name}"
       status:
         loadBalancer:
     ssh-service: |
       kind: Service
       apiVersion: v1
       metadata:
-        name: "${ssh-service-name}"
+        name: "%{ssh-service-name}"
         labels:
-          environment: "${environment-label}"
+          environment: "%{environment-label}"
       spec:
         ports:
           - name: 2222-ssh
@@ -118,7 +129,7 @@ environment-driver:
             targetPort: 2222
             nodePort: 0
         selector:
-          pnc-build-agent-pod: "${pod-name}"
+          pnc-build-agent-pod: "%{pod-name}"
         type: NodePort
       status:
         loadBalancer:
@@ -126,15 +137,105 @@ environment-driver:
       kind: Route
       apiVersion: v1
       metadata:
-        name: "${route-name}"
+        name: "%{route-name}"
       spec:
-        host: "${build-agent-host}"
-        path: "${route-path}"
+        host: "%{build-agent-host}"
+        path: "%{route-path}"
         to:
           kind: Service
-          name: "${service-name}"
+          name: "%{service-name}"
 
 "%test":
   quarkus:
     oidc:
       enabled: false
+  environment-driver:
+    http-client:
+      connect-timeout: 1
+      request-timeout: 3
+    build-agent:
+      ping-path: PingHandler
+    openshift:
+      pod: |
+        kind: Pod
+        apiVersion: v1
+        metadata:
+          name: "%{pod-name}"
+          labels:
+            pnc-build-agent-pod: "%{pod-name}"
+            environment: "%{environment-label}"
+        status:
+          phase: Running
+        spec:
+          nodeSelector:
+            acceptpncbuildagent: 'true'
+          containers:
+            - name: pnc-build-agent-container
+              image: "%{image}"
+              ports:
+                - name: http
+                  containerPort: %{containerPort}
+                  protocol: TCP
+              env:
+                - name: firewallAllowedDestinations
+                  value: "%{firewallAllowedDestinations}"
+                - name: allowedHttpOutgoingDestinations
+                  value: "%{allowedHttpOutgoingDestinations}"
+                - name: isHttpActive
+                  value: "%{isHttpActive}"
+                - name: proxyServer
+                  value: "%{proxyServer}"
+                - name: proxyPort
+                  value: "%{proxyPort}"
+                - name: nonProxyHosts
+                  value: "%{nonProxyHosts}"
+                - name: proxyUsername
+                  value: "%{proxyUsername}"
+                - name: AProxDependencyUrl
+                  value: "%{AProxDependencyUrl}"
+                - name: AProxDeployUrl
+                  value: "%{AProxDeployUrl}"
+                - name: buildAgentContextPath
+                  value: "%{buildAgentContextPath}"
+                - name: buildAgentBindPort
+                  value: "%{containerPort}"
+                - name: workerUserPassword
+                  value: "%{workerUserPassword}"
+                - name: accessToken
+                  value: "%{accessToken}"
+                - name: logUserId
+                  value: "%{logUserId}"
+                - name: logProcessContext
+                  value: "%{logProcessContext}"
+                - name: buildContentId
+                  value: "%{buildContentId}"
+                - name: buildAgentArguments
+                  value: "-b 0.0.0.0 -p %{containerPort} -pl FILE -l /tmp -c %{buildAgentContextPath}"
+                - name: buildAgentJvmProperties
+                  value: "-DlogMDC=processContext:%{logProcessContext};tmp:%{tempBuild};exp:%{expiresDate}"
+              resources:
+              terminationMessagePath: "/dev/termination-log"
+              imagePullPolicy: Always
+              securityContext:
+                capabilities:
+                  add:
+                    - NET_ADMIN
+          restartPolicy: Never
+          activeDeadlineSeconds: 28800
+          dnsPolicy: ClusterFirst
+      service: |
+        kind: Service
+        apiVersion: v1
+        metadata:
+          name: "%{service-name}"
+          labels:
+            environment: "%{environment-label}"
+        spec:
+          ports:
+            - name: 8080-tcp
+              protocol: TCP
+              port: 8082
+              targetPort: %{containerPort}
+              nodePort: 0
+          clusterIP: 127.0.0.1
+

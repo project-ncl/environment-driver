@@ -27,13 +27,13 @@ public class EnvironmentCreationCompleted {
     }
 
     public static EnvironmentCreationCompleted failed(Throwable throwable) {
-        return EnvironmentCreationCompleted.builder()
-                .status(Status.FAILED)
-                .message(throwable.getMessage())
-                .build();
+        return EnvironmentCreationCompleted.builder().status(Status.FAILED).message(throwable.getMessage()).build();
     }
 
-    public static EnvironmentCreationCompleted success(URI environmentBaseUri, String workingDirectory, String sshPassword) {
+    public static EnvironmentCreationCompleted success(
+            URI environmentBaseUri,
+            String workingDirectory,
+            String sshPassword) {
         return EnvironmentCreationCompleted.builder()
                 .status(Status.SUCCESS)
                 .environmentBaseUri(environmentBaseUri)
