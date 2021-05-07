@@ -27,7 +27,7 @@ import javax.ws.rs.core.Response;
 import javax.ws.rs.ext.ExceptionMapper;
 import javax.ws.rs.ext.Provider;
 
-import org.jboss.pnc.environmentdriver.dto.ErrorResponse;
+import org.jboss.pnc.api.dto.ErrorResponse;
 import org.jboss.resteasy.spi.Failure;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

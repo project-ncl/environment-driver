@@ -59,12 +59,12 @@ import org.eclipse.microprofile.jwt.JsonWebToken;
 import org.jboss.pnc.api.constants.HttpHeaders;
 import org.jboss.pnc.api.constants.MDCHeaderKeys;
 import org.jboss.pnc.api.dto.Request;
+import org.jboss.pnc.api.environmentdriver.dto.EnvironmentCompleteResponse;
+import org.jboss.pnc.api.environmentdriver.dto.EnvironmentCreateRequest;
+import org.jboss.pnc.api.environmentdriver.dto.EnvironmentCreateResponse;
+import org.jboss.pnc.api.environmentdriver.dto.EnvironmentCreateResult;
 import org.jboss.pnc.common.Random;
 import org.jboss.pnc.common.Strings;
-import org.jboss.pnc.environmentdriver.dto.CompleteResponse;
-import org.jboss.pnc.environmentdriver.dto.CreateRequest;
-import org.jboss.pnc.environmentdriver.dto.CreateResponse;
-import org.jboss.pnc.environmentdriver.dto.EnvironmentCreationCompleted;
 import org.jboss.pnc.pncmetrics.GaugeMetric;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -129,8 +129,8 @@ public class Driver {
      *
      * @return CompletionStage which is completed when all required requests to the Openshift complete.
      */
-    public CompletionStage<CreateResponse> create(CreateRequest createRequest) {
-        String environmentId = createRequest.getEnvironmentLabel() + "-" + Random.randString(6);
+    public CompletionStage<EnvironmentCreateResponse> create(EnvironmentCreateRequest environmentCreateRequest) {
+        String environmentId = environmentCreateRequest.getEnvironmentLabel() + "-" + Random.randString(6);
 
         String podName = getPodName(environmentId);
         String serviceName = getServiceName(environmentId);
@@ -140,18 +140,18 @@ public class Driver {
         boolean proxyActive = !Strings.isEmpty(configuration.getProxyServer())
                 && !Strings.isEmpty(configuration.getProxyPort());
 
-        environmentVariables.put("image", createRequest.getImageId());
+        environmentVariables.put("image", environmentCreateRequest.getImageId());
         environmentVariables.put("firewallAllowedDestinations", configuration.getFirewallAllowedDestinations());
         environmentVariables.put("isHttpActive", Boolean.toString(proxyActive).toLowerCase());
         environmentVariables.put("proxyServer", configuration.getProxyServer());
         environmentVariables.put("proxyPort", configuration.getProxyPort());
         environmentVariables.put("nonProxyHosts", configuration.getNonProxyHosts());
 
-        environmentVariables.put("AProxDependencyUrl", createRequest.getRepositoryDependencyUrl());
-        environmentVariables.put("AProxDeployUrl", createRequest.getRepositoryDeployUrl());
+        environmentVariables.put("AProxDependencyUrl", environmentCreateRequest.getRepositoryDependencyUrl());
+        environmentVariables.put("AProxDeployUrl", environmentCreateRequest.getRepositoryDeployUrl());
 
         environmentVariables.put("containerPort", configuration.getBuildAgentContainerPort());
-        environmentVariables.put("buildContentId", createRequest.getRepositoryBuildContentId());
+        environmentVariables.put("buildContentId", environmentCreateRequest.getRepositoryBuildContentId());
         environmentVariables.put("accessToken", webToken.getRawToken());
 
         try {
@@ -162,17 +162,17 @@ public class Driver {
 
         environmentVariables.put(
                 "resourcesMemory",
-                builderPodMemory(configuration.getBuilderPodMemory(), createRequest.getPodMemoryOverride()));
+                builderPodMemory(configuration.getBuilderPodMemory(), environmentCreateRequest.getPodMemoryOverride()));
 
         String buildAgentContextPath = "pnc-ba-" + environmentId;
 
-        environmentVariables.put("environment-label", createRequest.getEnvironmentLabel());
+        environmentVariables.put("environment-label", environmentCreateRequest.getEnvironmentLabel());
         environmentVariables.put("pod-name", podName);
         environmentVariables.put("service-name", serviceName);
         environmentVariables.put("buildAgentContextPath", "/" + buildAgentContextPath);
 
         String sshPassword;
-        if (createRequest.isAllowSshDebug()) {
+        if (environmentCreateRequest.isAllowSshDebug()) {
             sshPassword = RandomStringUtils.randomAlphanumeric(10);
             environmentVariables.put("workerUserPassword", sshPassword);
         } else {
@@ -196,9 +196,15 @@ public class Driver {
 
         return podAndServiceFuture
                 .thenApplyAsync(
-                        (nul) -> startMonitor(serviceName, podName, createRequest.getCompletionCallback(), sshPassword),
+                        (nul) -> startMonitor(
+                                serviceName,
+                                podName,
+                                environmentCreateRequest.getCompletionCallback(),
+                                sshPassword),
                         executor)
-                .thenApplyAsync((nul) -> new CreateResponse(environmentId, getCancelRequest(environmentId)), executor);
+                .thenApplyAsync(
+                        (nul) -> new EnvironmentCreateResponse(environmentId, getCancelRequest(environmentId)),
+                        executor);
     }
 
     private Request getCancelRequest(String environmentId) {
@@ -212,7 +218,7 @@ public class Driver {
                 .build();
     }
 
-    public CompletionStage<CompleteResponse> enableDebug(String environmentId) {
+    public CompletionStage<EnvironmentCompleteResponse> enableDebug(String environmentId) {
         Map<String, String> serviceEnvVariables = new HashMap<>();
         serviceEnvVariables.put("pod-name", getPodName(environmentId));
         serviceEnvVariables.put("ssh-service-name", getSshServiceName(environmentId));
@@ -246,7 +252,8 @@ public class Driver {
             return new InetSocketAddress(sshHost, sshPort);
         }, executor)
                 .thenComposeAsync(this::pingSsh)
-                .thenApplyAsync(socketAddr -> new CompleteResponse(socketAddr.getHostName(), socketAddr.getPort()));
+                .thenApplyAsync(
+                        socketAddr -> new EnvironmentCompleteResponse(socketAddr.getHostName(), socketAddr.getPort()));
     }
 
     private CompletableFuture<InetSocketAddress> pingSsh(InetSocketAddress inetSocketAddress) {
@@ -383,15 +390,15 @@ public class Driver {
             activeMonitors.remove(podName);
             if (throwable != null) {
                 if (throwable instanceof CancellationException) {
-                    callback(completionCallback, EnvironmentCreationCompleted.cancelled());
+                    callback(completionCallback, EnvironmentCreateResult.cancelled());
                 } else {
-                    callback(completionCallback, EnvironmentCreationCompleted.failed(throwable));
+                    callback(completionCallback, EnvironmentCreateResult.failed(throwable));
                     gaugeMetric.ifPresent(g -> g.incrementMetric(METRICS_POD_STARTED_FAILED_KEY));
                 }
             } else {
-                EnvironmentCreationCompleted environmentCreationCompleted = EnvironmentCreationCompleted
+                EnvironmentCreateResult environmentCreateResult = EnvironmentCreateResult
                         .success(serviceUri, configuration.getWorkingDirectory(), sshPassword);
-                callback(completionCallback, environmentCreationCompleted);
+                callback(completionCallback, environmentCreateResult);
                 gaugeMetric.ifPresent(g -> g.incrementMetric(METRICS_POD_STARTED_SUCCESS_KEY));
             }
             return null;
@@ -505,10 +512,10 @@ public class Driver {
                 .getStageAsync(() -> httpClient.sendAsync(request, HttpResponse.BodyHandlers.ofString()));
     }
 
-    private void callback(Request callback, EnvironmentCreationCompleted environmentCreationCompleted) {
+    private void callback(Request callback, EnvironmentCreateResult environmentCreateResult) {
         String body;
         try {
-            body = jsonMapper.writeValueAsString(environmentCreationCompleted);
+            body = jsonMapper.writeValueAsString(environmentCreateResult);
         } catch (JsonProcessingException e) {
             logger.error("Cannot serialize callback object.", e);
             body = "";
