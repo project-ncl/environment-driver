@@ -30,11 +30,11 @@ import javax.ws.rs.Produces;
 import javax.ws.rs.core.MediaType;
 
 import io.quarkus.security.Authenticated;
+import org.jboss.pnc.api.environmentdriver.dto.EnvironmentCompleteRequest;
+import org.jboss.pnc.api.environmentdriver.dto.EnvironmentCompleteResponse;
+import org.jboss.pnc.api.environmentdriver.dto.EnvironmentCreateRequest;
+import org.jboss.pnc.api.environmentdriver.dto.EnvironmentCreateResponse;
 import org.jboss.pnc.environmentdriver.Driver;
-import org.jboss.pnc.environmentdriver.dto.CompleteRequest;
-import org.jboss.pnc.environmentdriver.dto.CompleteResponse;
-import org.jboss.pnc.environmentdriver.dto.CreateRequest;
-import org.jboss.pnc.environmentdriver.dto.CreateResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -54,31 +54,32 @@ public class Public {
 
     /**
      * Create new build environment for a given configuration. EnvironmentId which is created based on
-     * {@link CreateRequest#getEnvironmentLabel()} is returned. The method
+     * {@link EnvironmentCreateRequest#getEnvironmentLabel()} is returned.
      */
     @Authenticated
     @POST
     @Path("/create")
-    public CompletionStage<CreateResponse> create(CreateRequest createRequest) {
-        logger.info("Requested new environment: {}", createRequest.getEnvironmentLabel());
-        return driver.create(createRequest);
+    public CompletionStage<EnvironmentCreateResponse> create(EnvironmentCreateRequest environmentCreateRequest) {
+        logger.info("Requested new environment: {}", environmentCreateRequest.getEnvironmentLabel());
+        return driver.create(environmentCreateRequest);
     }
 
     /**
-     * Based on the {@link CompleteRequest#isEnableDebug()} value destroys the environment or enables the ssh connection
-     * to the environment.
+     * Based on the {@link EnvironmentCompleteRequest#isEnableDebug()} value destroys the environment or enables the ssh
+     * connection to the environment.
      *
      */
     @Authenticated
     @PUT
     @Path("/complete")
-    public CompletionStage<CompleteResponse> complete(CompleteRequest completeRequest) {
-        logger.info("Requested environment complete: {}", completeRequest.getEnvironmentId());
-        if (completeRequest.isEnableDebug()) {
-            return driver.enableDebug(completeRequest.getEnvironmentId());
+    public CompletionStage<EnvironmentCompleteResponse> complete(
+            EnvironmentCompleteRequest environmentCompleteRequest) {
+        logger.info("Requested environment complete: {}", environmentCompleteRequest.getEnvironmentId());
+        if (environmentCompleteRequest.isEnableDebug()) {
+            return driver.enableDebug(environmentCompleteRequest.getEnvironmentId());
         } else {
-            return driver.destroyAll(completeRequest.getEnvironmentLabel())
-                    .thenApply(nul -> new CompleteResponse(null, -1));
+            return driver.destroyAll(environmentCompleteRequest.getEnvironmentLabel())
+                    .thenApply(nul -> new EnvironmentCompleteResponse(null, -1));
         }
     }
 
@@ -89,8 +90,8 @@ public class Public {
     @Authenticated
     @PUT
     @Path("/cancel/{environmentId}")
-    public CompletionStage<CompleteResponse> cancel(@PathParam("environmentId") String environmentId) {
+    public CompletionStage<EnvironmentCompleteResponse> cancel(@PathParam("environmentId") String environmentId) {
         logger.info("Requested environment destroy: {}", environmentId);
-        return driver.destroy(environmentId).thenApply(nul -> new CompleteResponse(null, -1));
+        return driver.destroy(environmentId).thenApply(nul -> new EnvironmentCompleteResponse(null, -1));
     }
 }

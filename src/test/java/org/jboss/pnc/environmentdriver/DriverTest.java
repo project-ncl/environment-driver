@@ -44,9 +44,10 @@ import org.eclipse.microprofile.config.ConfigProvider;
 import org.jboss.pnc.api.constants.HttpHeaders;
 import org.jboss.pnc.api.constants.MDCHeaderKeys;
 import org.jboss.pnc.api.dto.Request;
-import org.jboss.pnc.environmentdriver.dto.CreateRequest;
-import org.jboss.pnc.environmentdriver.dto.CreateResponse;
-import org.jboss.pnc.environmentdriver.dto.EnvironmentCreationCompleted;
+import org.jboss.pnc.api.enums.ResultStatus;
+import org.jboss.pnc.api.environmentdriver.dto.EnvironmentCreateRequest;
+import org.jboss.pnc.api.environmentdriver.dto.EnvironmentCreateResponse;
+import org.jboss.pnc.api.environmentdriver.dto.EnvironmentCreateResult;
 import org.jboss.pnc.environmentdriver.invokerserver.CallbackHandler;
 import org.jboss.pnc.environmentdriver.invokerserver.HttpServer;
 import org.jboss.pnc.environmentdriver.invokerserver.PingHandler;
@@ -60,8 +61,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import static io.restassured.RestAssured.given;
-import static org.jboss.pnc.environmentdriver.dto.EnvironmentCreationCompleted.Status.FAILED;
-import static org.jboss.pnc.environmentdriver.dto.EnvironmentCreationCompleted.Status.SUCCESS;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.RETURNS_DEEP_STUBS;
@@ -116,11 +115,11 @@ public class DriverTest {
                         new Request.Header(HttpHeaders.CONTENT_TYPE_STRING, MediaType.APPLICATION_JSON)));
 
         // when create the environment
-        CreateRequest request = CreateRequest.builder()
+        EnvironmentCreateRequest request = EnvironmentCreateRequest.builder()
                 .environmentLabel("env1")
                 .completionCallback(callbackRequest)
                 .build();
-        CreateResponse createResponse = given().contentType(MediaType.APPLICATION_JSON)
+        EnvironmentCreateResponse environmentCreateResponse = given().contentType(MediaType.APPLICATION_JSON)
                 .headers(requestHeaders())
                 .body(request)
                 .when()
@@ -129,22 +128,25 @@ public class DriverTest {
                 .statusCode(200)
                 .extract()
                 .body()
-                .as(CreateResponse.class);
+                .as(EnvironmentCreateResponse.class);
 
-        String environmentId = createResponse.getEnvironmentId();
+        String environmentId = environmentCreateResponse.getEnvironmentId();
         logger.info("Environment id: {}", environmentId);
 
         // then
         Assertions.assertTrue(environmentId.contains("env1"));
         Request callback = callbackRequests.take();
-        EnvironmentCreationCompleted creationCompleted = mapper
-                .convertValue(callback.getAttachment(), EnvironmentCreationCompleted.class);
+        EnvironmentCreateResult creationCompleted = mapper
+                .convertValue(callback.getAttachment(), EnvironmentCreateResult.class);
         logger.info("Environment creation completed with status: {}", creationCompleted.getStatus());
-        Assertions.assertEquals(SUCCESS, creationCompleted.getStatus(), "Unexpected environment creation status.");
+        Assertions.assertEquals(
+                ResultStatus.SUCCESS,
+                creationCompleted.getStatus(),
+                "Unexpected environment creation status.");
         Assertions.assertEquals(2, pingRequests.size(), "Unexpected number of received pings.");
 
         // clean up
-        CreateRequest destroyRequest = CreateRequest.builder()
+        EnvironmentCreateRequest destroyRequest = EnvironmentCreateRequest.builder()
                 .environmentLabel("env1")
                 .completionCallback(callbackRequest)
                 .build();
@@ -157,8 +159,7 @@ public class DriverTest {
                 .statusCode(200)
                 .extract()
                 .body()
-                .as(CreateResponse.class);
-
+                .as(EnvironmentCreateResponse.class);
     }
 
     @Test
@@ -174,7 +175,7 @@ public class DriverTest {
                             new Request.Header(HttpHeaders.CONTENT_TYPE_STRING, MediaType.APPLICATION_JSON)));
 
             // when create the environment
-            CreateRequest request = CreateRequest.builder()
+            EnvironmentCreateRequest request = EnvironmentCreateRequest.builder()
                     .environmentLabel("env1")
                     .completionCallback(callbackRequest)
                     .build();
@@ -185,7 +186,6 @@ public class DriverTest {
                     .post("/create")
                     .then()
                     .statusCode(500);
-
         } finally {
             System.setProperty("environment-driver.openshift.pod", originalPod);
         }
@@ -205,11 +205,11 @@ public class DriverTest {
                             new Request.Header(HttpHeaders.CONTENT_TYPE_STRING, MediaType.APPLICATION_JSON)));
 
             // when create the environment
-            CreateRequest request = CreateRequest.builder()
+            EnvironmentCreateRequest request = EnvironmentCreateRequest.builder()
                     .environmentLabel("env1")
                     .completionCallback(callbackRequest)
                     .build();
-            CreateResponse createResponse = given().contentType(MediaType.APPLICATION_JSON)
+            EnvironmentCreateResponse environmentCreateResponse = given().contentType(MediaType.APPLICATION_JSON)
                     .headers(requestHeaders())
                     .body(request)
                     .when()
@@ -218,22 +218,25 @@ public class DriverTest {
                     .statusCode(200)
                     .extract()
                     .body()
-                    .as(CreateResponse.class);
+                    .as(EnvironmentCreateResponse.class);
 
-            String environmentId = createResponse.getEnvironmentId();
+            String environmentId = environmentCreateResponse.getEnvironmentId();
             logger.info("Environment id: {}", environmentId);
 
             // then
             Request callback = callbackRequests.take();
-            EnvironmentCreationCompleted creationCompleted = mapper
-                    .convertValue(callback.getAttachment(), EnvironmentCreationCompleted.class);
+            EnvironmentCreateResult creationCompleted = mapper
+                    .convertValue(callback.getAttachment(), EnvironmentCreateResult.class);
             logger.info("Environment creation completed with status: {}", creationCompleted.getStatus());
-            Assertions.assertEquals(FAILED, creationCompleted.getStatus(), "Unexpected environment creation status.");
+            Assertions.assertEquals(
+                    ResultStatus.FAILED,
+                    creationCompleted.getStatus(),
+                    "Unexpected environment creation status.");
             logger.info("CreationCompleted.message: [{}]", creationCompleted.getMessage());
             Assertions.assertEquals(0, pingRequests.size(), "Unexpected number of received pings.");
 
             // clean up
-            CreateRequest destroyRequest = CreateRequest.builder()
+            EnvironmentCreateRequest destroyRequest = EnvironmentCreateRequest.builder()
                     .environmentLabel("env1")
                     .completionCallback(callbackRequest)
                     .build();
@@ -246,7 +249,7 @@ public class DriverTest {
                     .statusCode(200)
                     .extract()
                     .body()
-                    .as(CreateResponse.class);
+                    .as(EnvironmentCreateResponse.class);
         } finally {
             System.setProperty("environment-driver.openshift.service", originalService);
         }
