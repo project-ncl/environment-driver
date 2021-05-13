@@ -66,10 +66,10 @@ public class Configuration {
     @ConfigProperty(name = "environment-driver.build-agent.container-port")
     String buildAgentContainerPort;
 
-    @ConfigProperty(name = "environment-driver.build-agent.bind-path")
+    @ConfigProperty(name = "environment-driver.build-agent.bind-path", defaultValue = "")
     String buildAgentBindPath;
 
-    @ConfigProperty(name = "environment-driver.build-agent.ping-path", defaultValue = "")
+    @ConfigProperty(name = "environment-driver.build-agent.ping-path", defaultValue = "/")
     String buildAgentPingPath;
 
     @ConfigProperty(name = "environment-driver.build-agent.running-wait-for", defaultValue = "60")
