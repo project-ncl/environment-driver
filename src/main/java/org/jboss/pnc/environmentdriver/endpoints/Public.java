@@ -18,6 +18,7 @@
 
 package org.jboss.pnc.environmentdriver.endpoints;
 
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 
 import javax.inject.Inject;
@@ -79,8 +80,8 @@ public class Public {
             return driver.enableDebug(environmentCompleteRequest.getEnvironmentId());
         } else {
             logger.info("Requested environment destroy: {}", environmentCompleteRequest.getEnvironmentLabel());
-            return driver.destroyAll(environmentCompleteRequest.getEnvironmentLabel())
-                    .thenApply(nul -> new EnvironmentCompleteResponse(null, -1));
+            driver.destroyAll(environmentCompleteRequest.getEnvironmentLabel());
+            return CompletableFuture.completedFuture(new EnvironmentCompleteResponse(null, -1));
         }
     }
 
@@ -91,8 +92,9 @@ public class Public {
     @Authenticated
     @PUT
     @Path("/cancel/{environmentId}")
-    public CompletionStage<EnvironmentCompleteResponse> cancel(@PathParam("environmentId") String environmentId) {
+    public EnvironmentCompleteResponse cancel(@PathParam("environmentId") String environmentId) {
         logger.info("Requested environment destroy: {}", environmentId);
-        return driver.destroy(environmentId).thenApply(nul -> new EnvironmentCompleteResponse(null, -1));
+        driver.destroy(environmentId);
+        return new EnvironmentCompleteResponse(null, -1);
     }
 }
