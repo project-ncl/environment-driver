@@ -35,6 +35,7 @@ import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 import javax.enterprise.context.RequestScoped;
 import javax.inject.Inject;
@@ -43,6 +44,7 @@ import javax.ws.rs.core.MediaType;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
+import io.fabric8.kubernetes.api.model.HasMetadata;
 import io.fabric8.kubernetes.api.model.Pod;
 import io.fabric8.kubernetes.api.model.PodList;
 import io.fabric8.kubernetes.api.model.Service;
@@ -292,7 +294,7 @@ public class Driver {
     /**
      * Method will try its best to destroy the environment. Fire and forget operation.
      */
-    public CompletionStage<Void> destroy(String environmentId) {
+    public void destroy(String environmentId) {
         String podName = getPodName(environmentId);
         String serviceName = getServiceName(environmentId);
         activeMonitors.cancel(podName);
@@ -325,7 +327,6 @@ public class Driver {
                 logger.warn("Pod {} does not exists.", podName);
             }
         });
-        return CompletableFuture.completedFuture(null);
     }
 
     private RetryPolicy<String> getDestroyRetryPolicy(String resourceName) {
@@ -348,16 +349,16 @@ public class Driver {
      * Method will try its best to destroy all the environments created from given environmentName. Fire and forget
      * operation.
      */
-    public CompletionStage<Void> destroyAll(String environmentLabel) {
+    public void destroyAll(String environmentLabel) {
         // delete service
         RetryPolicy<String> servicesRetryPolicy = getDestroyRetryPolicy("services-of-" + environmentLabel);
         Failsafe.with(servicesRetryPolicy).with(executor).runAsync(() -> {
             ServiceList serviceList = openShiftClient.services().withLabel("environment", environmentLabel).list();
             if (serviceList != null) {
                 if (openShiftClient.services().delete(serviceList.getItems())) {
-                    logger.info("Services {} deleted.", serviceList.getItems());
+                    logger.info("Services {} deleted.", getItemNames(serviceList.getItems()));
                 } else {
-                    logger.warn("Services {} were not deleted.", serviceList.getItems());
+                    logger.warn("Services {} were not deleted.", getItemNames(serviceList.getItems()));
                 }
             } else {
                 logger.warn("No services found by label {}.", environmentLabel);
@@ -369,15 +370,14 @@ public class Driver {
             PodList podList = openShiftClient.pods().withLabel("environment", environmentLabel).list();
             if (podList != null) {
                 if (openShiftClient.pods().delete(podList.getItems())) {
-                    logger.info("Pods {} deleted.", podList.getItems());
+                    logger.info("Pods {} deleted.", getItemNames(podList.getItems()));
                 } else {
-                    logger.warn("Pods {} were not deleted.", podList.getItems());
+                    logger.warn("Pods {} were not deleted.", getItemNames(podList.getItems()));
                 }
             } else {
                 logger.warn("No pods found by label {}.", environmentLabel);
             }
         });
-        return null;
     }
 
     private Void startMonitor(String serviceName, String podName, Request completionCallback, String sshPassword) {
@@ -664,4 +664,9 @@ public class Driver {
     private boolean isHttpSuccess(int responseCode) {
         return responseCode >= 200 && responseCode < 300;
     }
+
+    private List<String> getItemNames(List<? extends HasMetadata> items) {
+        return items.stream().map(s -> s.getMetadata().getName()).collect(Collectors.toList());
+    }
+
 }
