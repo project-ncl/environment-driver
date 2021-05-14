@@ -263,6 +263,7 @@ public class Driver {
     private CompletableFuture<InetSocketAddress> pingSsh(InetSocketAddress inetSocketAddress) {
         RetryPolicy<InetSocketAddress> retryPolicy = new RetryPolicy<InetSocketAddress>()
                 .withMaxDuration(Duration.ofSeconds(configuration.getSshPingRetryDuration()))
+                .withMaxRetries(Integer.MAX_VALUE) // retry until maxDuration is reached
                 .withBackoff(500, 5000, ChronoUnit.MILLIS)
                 .onSuccess(ctx -> logger.info("SSH ping success."))
                 .onRetry(
@@ -329,6 +330,7 @@ public class Driver {
 
     private RetryPolicy<String> getDestroyRetryPolicy(String resourceName) {
         return new RetryPolicy<String>().withMaxDuration(Duration.ofSeconds(configuration.getDestroyRetryDuration()))
+                .withMaxRetries(Integer.MAX_VALUE) // retry until maxDuration is reached
                 .withBackoff(1000, 10000, ChronoUnit.MILLIS)
                 .onSuccess(ctx -> logger.info("Destroy {} success.", resourceName))
                 .onRetry(
@@ -391,6 +393,7 @@ public class Driver {
             activeMonitors.add(podName, pingFuture);
             return pingFuture.thenApply((n) -> serviceUri);
         }).handleAsync((serviceUri, throwable) -> {
+            logger.debug("Completing monitor for pod: {}", podName);
             activeMonitors.remove(podName);
             if (throwable != null) {
                 if (throwable instanceof CancellationException) {
@@ -419,7 +422,8 @@ public class Driver {
     private CompletableFuture<Void> isPodRunning(String podName) {
         RetryPolicy<String> retryPolicy = new RetryPolicy<String>()
                 .withMaxDuration(Duration.ofSeconds(configuration.getPodRunningWaitFor()))
-                .withBackoff(500, 5000, ChronoUnit.MILLIS)
+                .withMaxRetries(Integer.MAX_VALUE) // retry until maxDuration is reached
+                .withBackoff(1000, 5000, ChronoUnit.MILLIS)
                 .abortOn(UnableToStartException.class)
                 .onSuccess(ctx -> logger.info("Pod is running: {}.", podName))
                 .onRetry(
@@ -451,6 +455,7 @@ public class Driver {
     private CompletableFuture<URI> isServiceRunning(String serviceName) {
         RetryPolicy<Object> retryPolicy = new RetryPolicy<>()
                 .withMaxDuration(Duration.ofSeconds(configuration.getServiceRunningWaitFor()))
+                .withMaxRetries(Integer.MAX_VALUE) // retry until maxDuration is reached
                 .withBackoff(500, 5000, ChronoUnit.MILLIS)
                 .onRetry(
                         ctx -> logger.warn(
@@ -485,6 +490,7 @@ public class Driver {
         RetryPolicy<HttpResponse<String>> retryPolicy = new RetryPolicy<HttpResponse<String>>()
                 .handleIf((response, throwable) -> throwable != null || !isHttpSuccess(response.statusCode()))
                 .withMaxDuration(Duration.ofSeconds(configuration.getBuildAgentRunningWaitFor()))
+                .withMaxRetries(Integer.MAX_VALUE) // retry until maxDuration is reached
                 .withBackoff(500, 2000, ChronoUnit.MILLIS)
                 .onSuccess(
                         ctx -> logger.info("BuildAgent responded, response status: {}.", ctx.getResult().statusCode()))
@@ -534,6 +540,7 @@ public class Driver {
         RetryPolicy<HttpResponse<String>> retryPolicy = new RetryPolicy<HttpResponse<String>>()
                 .handleIf((response, throwable) -> throwable != null || !isHttpSuccess(response.statusCode()))
                 .withMaxDuration(Duration.ofSeconds(configuration.getCallbackRetryDuration()))
+                .withMaxRetries(Integer.MAX_VALUE) // retry until maxDuration is reached
                 .withBackoff(500, 5000, ChronoUnit.MILLIS)
                 .onSuccess(ctx -> logger.info("Callback sent, response status: {}.", ctx.getResult().statusCode()))
                 .onRetry(ctx -> {
