@@ -9,7 +9,6 @@ quarkus:
       format: "%d{HH:mm:ss,SSS} %-5p [%c{3.}] (%t) %s%e mdc:[%X]%n"
 #  kubernetes-client:
     #namespace: default
-    #master-url: https://opeshift-host.com/
     #token: secretToken
 oidc:
     auth-server-url: https://keycloak-host/auth/realms/pncredhat

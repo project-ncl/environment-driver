@@ -135,6 +135,8 @@ public class Driver {
         String podName = getPodName(environmentId);
         String serviceName = getServiceName(environmentId);
 
+        String rawWebToken = webToken.getRawToken();
+
         Map<String, String> environmentVariables = new HashMap<>();
 
         boolean proxyActive = !Strings.isEmpty(configuration.getProxyServer())
@@ -152,7 +154,7 @@ public class Driver {
 
         environmentVariables.put("containerPort", configuration.getBuildAgentContainerPort());
         environmentVariables.put("buildContentId", environmentCreateRequest.getRepositoryBuildContentId());
-        environmentVariables.put("accessToken", webToken.getRawToken());
+        environmentVariables.put("accessToken", rawWebToken);
 
         try {
             environmentVariables.putAll(mdcToMap());
@@ -203,18 +205,20 @@ public class Driver {
                                 sshPassword),
                         executor)
                 .thenApplyAsync(
-                        (nul) -> new EnvironmentCreateResponse(environmentId, getCancelRequest(environmentId)),
+                        (nul) -> new EnvironmentCreateResponse(
+                                environmentId,
+                                getCancelRequest(environmentId, rawWebToken)),
                         executor);
     }
 
-    private Request getCancelRequest(String environmentId) {
+    private Request getCancelRequest(String environmentId, String rawWebToken) {
         return Request.builder()
                 .method(Request.Method.PUT)
                 .uri(
                         URI.create(
                                 Strings.stripEndingSlash(configuration.getThisServiceBaseUrl()) + "/cancel/"
                                         + environmentId))
-                .headers(getHeaders())
+                .headers(getHeaders(rawWebToken))
                 .build();
     }
 
@@ -582,10 +586,10 @@ public class Driver {
         }
     }
 
-    private List<Request.Header> getHeaders() {
+    private List<Request.Header> getHeaders(String rawWebToken) {
         List<Request.Header> headers = new ArrayList<>();
         headers.add(new Request.Header(HttpHeaders.CONTENT_TYPE_STRING, MediaType.APPLICATION_JSON));
-        if (webToken.getRawToken() != null) {
+        if (rawWebToken != null) {
             headers.add(new Request.Header(HttpHeaders.AUTHORIZATION_STRING, "Bearer " + webToken.getRawToken()));
         }
         headersFromMdc(headers, MDCHeaderKeys.REQUEST_CONTEXT);

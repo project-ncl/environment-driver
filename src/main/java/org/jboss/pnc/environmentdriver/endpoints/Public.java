@@ -74,10 +74,11 @@ public class Public {
     @Path("/complete")
     public CompletionStage<EnvironmentCompleteResponse> complete(
             EnvironmentCompleteRequest environmentCompleteRequest) {
-        logger.info("Requested environment complete: {}", environmentCompleteRequest.getEnvironmentId());
         if (environmentCompleteRequest.isEnableDebug()) {
+            logger.info("Requested environment debug: {}", environmentCompleteRequest.getEnvironmentId());
             return driver.enableDebug(environmentCompleteRequest.getEnvironmentId());
         } else {
+            logger.info("Requested environment destroy: {}", environmentCompleteRequest.getEnvironmentLabel());
             return driver.destroyAll(environmentCompleteRequest.getEnvironmentLabel())
                     .thenApply(nul -> new EnvironmentCompleteResponse(null, -1));
         }
