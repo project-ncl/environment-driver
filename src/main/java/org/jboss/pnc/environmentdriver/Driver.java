@@ -590,7 +590,7 @@ public class Driver {
         List<Request.Header> headers = new ArrayList<>();
         headers.add(new Request.Header(HttpHeaders.CONTENT_TYPE_STRING, MediaType.APPLICATION_JSON));
         if (rawWebToken != null) {
-            headers.add(new Request.Header(HttpHeaders.AUTHORIZATION_STRING, "Bearer " + webToken.getRawToken()));
+            headers.add(new Request.Header(HttpHeaders.AUTHORIZATION_STRING, "Bearer " + rawWebToken));
         }
         headersFromMdc(headers, MDCHeaderKeys.REQUEST_CONTEXT);
         headersFromMdc(headers, MDCHeaderKeys.PROCESS_CONTEXT);
