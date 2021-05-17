@@ -388,18 +388,19 @@ public class Driver {
             String podName,
             Request completionCallback,
             String sshPassword) {
-        CompletableFuture<URI> serviceRunning = isServiceRunning(serviceName, buildAgentContextPath);
+        CompletableFuture<URI> serviceRunning = isServiceRunning(serviceName);
         activeMonitors.add(podName, serviceRunning);
 
         CompletableFuture<Void> podRunning = isPodRunning(podName);
         activeMonitors.add(podName, podRunning);
 
         CompletableFuture.allOf(podRunning, serviceRunning).thenComposeAsync((nul) -> {
-            URI serviceUri = serviceRunning.join(); // future already completed (allOff)
-            CompletableFuture<HttpResponse<String>> pingFuture = pingBuildAgent(serviceUri);
+            URI serviceBaseUri = serviceRunning.join(); // future already completed (allOff)
+            String serviceUriWithContext = serviceBaseUri + buildAgentContextPath;
+            CompletableFuture<HttpResponse<String>> pingFuture = pingBuildAgent(serviceUriWithContext);
             activeMonitors.add(podName, pingFuture);
-            return pingFuture.thenApply((ignoreResponse) -> serviceUri);
-        }).handleAsync((serviceUri, throwable) -> {
+            return pingFuture.thenApply((ignoreResponse) -> URI.create(serviceUriWithContext));
+        }).handleAsync((serviceUriWithContext, throwable) -> {
             logger.debug("Completing monitor for pod: {}", podName);
             activeMonitors.remove(podName);
             if (throwable != null) {
@@ -411,7 +412,7 @@ public class Driver {
                 }
             } else {
                 EnvironmentCreateResult environmentCreateResult = EnvironmentCreateResult
-                        .success(serviceUri, configuration.getWorkingDirectory(), sshPassword);
+                        .success(serviceUriWithContext, configuration.getWorkingDirectory(), sshPassword);
                 callback(completionCallback, environmentCreateResult);
                 gaugeMetric.ifPresent(g -> g.incrementMetric(METRICS_POD_STARTED_SUCCESS_KEY));
             }
@@ -459,7 +460,7 @@ public class Driver {
         });
     }
 
-    private CompletableFuture<URI> isServiceRunning(String serviceName, String buildAgentContextPath) {
+    private CompletableFuture<URI> isServiceRunning(String serviceName) {
         RetryPolicy<Object> retryPolicy = new RetryPolicy<>()
                 .withMaxDuration(Duration.ofSeconds(configuration.getServiceRunningWaitFor()))
                 .withMaxRetries(Integer.MAX_VALUE) // retry until maxDuration is reached
@@ -481,16 +482,14 @@ public class Driver {
                 throw new DriverException("Service " + serviceName + " is not running.");
             } else {
                 logger.info("Service up: {} ip: {}.", serviceName, clusterIP);
-                return URI.create(
-                        configuration.getBuildAgentServiceScheme() + "://" + clusterIP + ":" + clusterPort
-                                + buildAgentContextPath + configuration.getBuildAgentBindPath());
+                return URI.create(configuration.getBuildAgentServiceScheme() + "://" + clusterIP + ":" + clusterPort);
             }
         });
     }
 
-    private CompletableFuture<HttpResponse<String>> pingBuildAgent(URI serviceUri) {
+    private CompletableFuture<HttpResponse<String>> pingBuildAgent(String serviceUriWithContext) {
         HttpRequest.Builder builder = HttpRequest.newBuilder()
-                .uri(serviceUri.resolve(configuration.getBuildAgentPingPath()))
+                .uri(URI.create(serviceUriWithContext + configuration.getBuildAgentPingPath()))
                 .method(Request.Method.HEAD.name(), HttpRequest.BodyPublishers.noBody())
                 .timeout(Duration.ofSeconds(configuration.getHttpClientRequestTimeout()));
         HttpRequest request = builder.build();
