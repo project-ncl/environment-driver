@@ -516,7 +516,7 @@ public class Driver {
                 .onFailure(ctx -> logger.error("Unable to ping BuildAgent: {}.", ctx.getFailure().getMessage()))
                 .onAbort(e -> logger.warn("BuildAgent ping aborted: {}.", e.getFailure().getMessage()));
 
-        logger.info("Scheduling BuildAgent ping to {} port: {} ...", request.uri());
+        logger.info("About to ping BuildAgent {}.", request.uri());
         return Failsafe.with(retryPolicy)
                 .with(executor)
                 .getStageAsync(() -> httpClient.sendAsync(request, HttpResponse.BodyHandlers.ofString()));
@@ -542,7 +542,11 @@ public class Driver {
                 .withMaxDuration(Duration.ofSeconds(configuration.getCallbackRetryDuration()))
                 .withMaxRetries(Integer.MAX_VALUE) // retry until maxDuration is reached
                 .withBackoff(500, 5000, ChronoUnit.MILLIS)
-                .onSuccess(ctx -> logger.info("Callback sent, response status: {}.", ctx.getResult().statusCode()))
+                .onSuccess(
+                        ctx -> logger.info(
+                                "Callback sent to: {}, response status: {}.",
+                                callback.getUri(),
+                                ctx.getResult().statusCode()))
                 .onRetry(ctx -> {
                     String lastError;
                     if (ctx.getLastFailure() != null) {
@@ -562,8 +566,13 @@ public class Driver {
                             lastError,
                             lastStatus);
                 })
-                .onFailure(ctx -> logger.error("Unable to send callback."))
+                .onFailure(ctx -> logger.error("Unable to send callback to: " + callback.getUri()))
                 .onAbort(e -> logger.warn("Callback aborted: {}.", e.getFailure().getMessage()));
+        logger.debug(
+                "About to callback: {} {}. With headers: {}.",
+                callback.getMethod(),
+                callback.getUri(),
+                callback.getHeaders());
         Failsafe.with(retryPolicy)
                 .with(executor)
                 .getStageAsync(() -> httpClient.sendAsync(request, HttpResponse.BodyHandlers.ofString()));
