@@ -475,7 +475,7 @@ public class Driver {
             } else {
                 logger.info("Service up: {} ip: {}.", serviceName, clusterIP);
                 return URI.create(
-                        configuration.getBuildAgentServiceScheme() + "://" + clusterIP + ":" + clusterPort + "/"
+                        configuration.getBuildAgentServiceScheme() + "://" + clusterIP + ":" + clusterPort
                                 + configuration.getBuildAgentBindPath());
             }
         });
