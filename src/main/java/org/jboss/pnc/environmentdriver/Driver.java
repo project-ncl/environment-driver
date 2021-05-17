@@ -34,6 +34,7 @@ import java.util.Optional;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
+import java.util.function.Function;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
@@ -391,7 +392,7 @@ public class Driver {
             URI serviceUri = serviceRunning.join(); // future already completed (allOff)
             CompletableFuture<HttpResponse<String>> pingFuture = pingBuildAgent(serviceUri);
             activeMonitors.add(podName, pingFuture);
-            return pingFuture.thenApply((n) -> serviceUri);
+            return pingFuture.thenApply((ignoreResponse) -> serviceUri);
         }).handleAsync((serviceUri, throwable) -> {
             logger.debug("Completing monitor for pod: {}", podName);
             activeMonitors.remove(podName);
@@ -488,7 +489,6 @@ public class Driver {
                 .timeout(Duration.ofSeconds(configuration.getHttpClientRequestTimeout()));
         HttpRequest request = builder.build();
         RetryPolicy<HttpResponse<String>> retryPolicy = new RetryPolicy<HttpResponse<String>>()
-                .handleIf((response, throwable) -> throwable != null || !isHttpSuccess(response.statusCode()))
                 .withMaxDuration(Duration.ofSeconds(configuration.getBuildAgentRunningWaitFor()))
                 .withMaxRetries(Integer.MAX_VALUE) // retry until maxDuration is reached
                 .withBackoff(500, 2000, ChronoUnit.MILLIS)
@@ -519,7 +519,9 @@ public class Driver {
         logger.info("About to ping BuildAgent {}.", request.uri());
         return Failsafe.with(retryPolicy)
                 .with(executor)
-                .getStageAsync(() -> httpClient.sendAsync(request, HttpResponse.BodyHandlers.ofString()));
+                .getStageAsync(
+                        () -> httpClient.sendAsync(request, HttpResponse.BodyHandlers.ofString())
+                                .thenApply(validateResponse()));
     }
 
     private void callback(Request callback, EnvironmentCreateResult environmentCreateResult) {
@@ -538,7 +540,6 @@ public class Driver {
         HttpRequest request = builder.build();
 
         RetryPolicy<HttpResponse<String>> retryPolicy = new RetryPolicy<HttpResponse<String>>()
-                .handleIf((response, throwable) -> throwable != null || !isHttpSuccess(response.statusCode()))
                 .withMaxDuration(Duration.ofSeconds(configuration.getCallbackRetryDuration()))
                 .withMaxRetries(Integer.MAX_VALUE) // retry until maxDuration is reached
                 .withBackoff(500, 5000, ChronoUnit.MILLIS)
@@ -575,7 +576,9 @@ public class Driver {
                 callback.getHeaders());
         Failsafe.with(retryPolicy)
                 .with(executor)
-                .getStageAsync(() -> httpClient.sendAsync(request, HttpResponse.BodyHandlers.ofString()));
+                .getStageAsync(
+                        () -> httpClient.sendAsync(request, HttpResponse.BodyHandlers.ofString())
+                                .thenApply(validateResponse()));
     }
 
     private String getPodName(String environmentId) {
@@ -672,6 +675,16 @@ public class Driver {
 
     private boolean isHttpSuccess(int responseCode) {
         return responseCode >= 200 && responseCode < 300;
+    }
+
+    private Function<HttpResponse<String>, HttpResponse<String>> validateResponse() {
+        return response -> {
+            if (isHttpSuccess(response.statusCode())) {
+                return response;
+            } else {
+                throw new FailedResponseException("Response status code: " + response.statusCode());
+            }
+        };
     }
 
     private List<String> getItemNames(List<? extends HasMetadata> items) {
