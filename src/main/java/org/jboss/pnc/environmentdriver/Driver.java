@@ -169,12 +169,12 @@ public class Driver {
                 "resourcesMemory",
                 builderPodMemory(configuration.getBuilderPodMemory(), environmentCreateRequest.getPodMemoryOverride()));
 
-        String buildAgentContextPath = "pnc-ba-" + environmentId;
+        String buildAgentContextPath = "/pnc-ba-" + environmentId;
 
         environmentVariables.put("environment-label", environmentCreateRequest.getEnvironmentLabel());
         environmentVariables.put("pod-name", podName);
         environmentVariables.put("service-name", serviceName);
-        environmentVariables.put("buildAgentContextPath", "/" + buildAgentContextPath);
+        environmentVariables.put("buildAgentContextPath", buildAgentContextPath);
 
         String sshPassword;
         if (environmentCreateRequest.isAllowSshDebug()) {
@@ -203,6 +203,7 @@ public class Driver {
                 .thenApplyAsync(
                         (nul) -> startMonitor(
                                 serviceName,
+                                buildAgentContextPath,
                                 podName,
                                 environmentCreateRequest.getCompletionCallback(),
                                 sshPassword),
@@ -381,8 +382,13 @@ public class Driver {
         });
     }
 
-    private Void startMonitor(String serviceName, String podName, Request completionCallback, String sshPassword) {
-        CompletableFuture<URI> serviceRunning = isServiceRunning(serviceName);
+    private Void startMonitor(
+            String serviceName,
+            String buildAgentContextPath,
+            String podName,
+            Request completionCallback,
+            String sshPassword) {
+        CompletableFuture<URI> serviceRunning = isServiceRunning(serviceName, buildAgentContextPath);
         activeMonitors.add(podName, serviceRunning);
 
         CompletableFuture<Void> podRunning = isPodRunning(podName);
@@ -453,7 +459,7 @@ public class Driver {
         });
     }
 
-    private CompletableFuture<URI> isServiceRunning(String serviceName) {
+    private CompletableFuture<URI> isServiceRunning(String serviceName, String buildAgentContextPath) {
         RetryPolicy<Object> retryPolicy = new RetryPolicy<>()
                 .withMaxDuration(Duration.ofSeconds(configuration.getServiceRunningWaitFor()))
                 .withMaxRetries(Integer.MAX_VALUE) // retry until maxDuration is reached
@@ -477,7 +483,7 @@ public class Driver {
                 logger.info("Service up: {} ip: {}.", serviceName, clusterIP);
                 return URI.create(
                         configuration.getBuildAgentServiceScheme() + "://" + clusterIP + ":" + clusterPort
-                                + configuration.getBuildAgentBindPath());
+                                + buildAgentContextPath + configuration.getBuildAgentBindPath());
             }
         });
     }

@@ -19,17 +19,15 @@
 package org.jboss.pnc.environmentdriver.invokerserver;
 
 import java.security.NoSuchAlgorithmException;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.HashSet;
+import java.util.Set;
 
-import javax.servlet.Servlet;
 import javax.servlet.ServletException;
 
 import io.undertow.Undertow;
 import io.undertow.server.HttpHandler;
 import io.undertow.servlet.api.DeploymentInfo;
 import io.undertow.servlet.api.DeploymentManager;
-import io.undertow.servlet.api.InstanceFactory;
 
 import static io.undertow.servlet.Servlets.defaultContainer;
 import static io.undertow.servlet.Servlets.deployment;
@@ -41,22 +39,24 @@ import static io.undertow.servlet.Servlets.servlet;
 public class HttpServer {
     private Undertow undertow;
 
-    private Map<Class<? extends Servlet>, InstanceFactory<? extends Servlet>> servlets = new HashMap<>();
+    private Set<ServletDeployment> servlets = new HashSet<>();
 
     public void start(int port, String host) throws ServletException, NoSuchAlgorithmException {
         DeploymentInfo servletBuilder = deployment().setClassLoader(HttpServer.class.getClassLoader())
                 .setContextPath("/")
                 .setDeploymentName("ROOT.war");
 
-        for (Class<? extends Servlet> servletClass : servlets.keySet()) {
-            InstanceFactory<? extends Servlet> instanceFactory = servlets.get(servletClass);
-            if (instanceFactory != null) {
+        for (ServletDeployment deployment : servlets) {
+            if (deployment.getInstanceFactory() != null) {
                 servletBuilder.addServlet(
-                        servlet(servletClass.getSimpleName(), servletClass, instanceFactory)
-                                .addMapping(servletClass.getSimpleName()));
+                        servlet(
+                                deployment.getaClass().getSimpleName(),
+                                deployment.getaClass(),
+                                deployment.getInstanceFactory()).addMapping(deployment.getMapping()));
             } else {
                 servletBuilder.addServlet(
-                        servlet(servletClass.getSimpleName(), servletClass).addMapping(servletClass.getSimpleName()));
+                        servlet(deployment.getaClass().getSimpleName(), deployment.getaClass())
+                                .addMapping(deployment.getMapping()));
             }
         }
 
@@ -74,7 +74,7 @@ public class HttpServer {
         undertow.stop();
     }
 
-    public void addServlet(Class<? extends Servlet> servletClass, InstanceFactory<? extends Servlet> servletFactory) {
-        this.servlets.put(servletClass, servletFactory);
+    public void addServlet(ServletDeployment servletDeployment) {
+        this.servlets.add(servletDeployment);
     }
 }

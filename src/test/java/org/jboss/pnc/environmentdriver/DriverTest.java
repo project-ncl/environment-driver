@@ -51,6 +51,7 @@ import org.jboss.pnc.api.environmentdriver.dto.EnvironmentCreateResult;
 import org.jboss.pnc.environmentdriver.invokerserver.CallbackHandler;
 import org.jboss.pnc.environmentdriver.invokerserver.HttpServer;
 import org.jboss.pnc.environmentdriver.invokerserver.PingHandler;
+import org.jboss.pnc.environmentdriver.invokerserver.ServletDeployment;
 import org.jboss.pnc.environmentdriver.invokerserver.ServletInstanceFactory;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assertions;
@@ -94,9 +95,14 @@ public class DriverTest {
         callbackServer = new HttpServer();
 
         callbackServer.addServlet(
-                CallbackHandler.class,
-                new ServletInstanceFactory(new CallbackHandler(callbackRequests::add)));
-        callbackServer.addServlet(PingHandler.class, new ServletInstanceFactory(new PingHandler(pingRequests::add)));
+                new ServletDeployment(
+                        CallbackHandler.class,
+                        new ServletInstanceFactory(new CallbackHandler(callbackRequests::add))));
+        callbackServer.addServlet(
+                new ServletDeployment(
+                        PingHandler.class,
+                        new ServletInstanceFactory(new PingHandler(pingRequests::add)),
+                        "/*"));
         callbackServer.start(8082, BIND_HOST);
     }
 
