@@ -63,16 +63,16 @@ public class Configuration {
     @ConfigProperty(name = "environment-driver.build-agent.service-scheme", defaultValue = "http")
     String buildAgentServiceScheme;
 
-    @ConfigProperty(name = "environment-driver.build-agent.container-port")
+    @ConfigProperty(name = "environment-driver.build-agent.container-port", defaultValue = "8080")
     String buildAgentContainerPort;
 
-    @ConfigProperty(name = "environment-driver.build-agent.bind-path", defaultValue = "")
+    @ConfigProperty(name = "environment-driver.build-agent.bind-path", defaultValue = "/")
     String buildAgentBindPath;
 
     @ConfigProperty(name = "environment-driver.build-agent.ping-path", defaultValue = "/")
     String buildAgentPingPath;
 
-    @ConfigProperty(name = "environment-driver.build-agent.running-wait-for", defaultValue = "60")
+    @ConfigProperty(name = "environment-driver.build-agent.running-wait-for", defaultValue = "30")
     long buildAgentRunningWaitFor;
 
     @ConfigProperty(name = "environment-driver.builder-pod-memory", defaultValue = "4")

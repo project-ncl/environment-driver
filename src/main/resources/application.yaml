@@ -25,10 +25,6 @@ environment-driver:
   proxy-server: http-proxy-host
   proxy-port: 8080
   working-directory: /tmp
-  build-agent:
-    bind-path: /
-    container-port: 8080
-    running-wait-for: 3
   self-base-url: http://localhost:8081/
   openshift:
     pod: |
@@ -155,7 +151,7 @@ environment-driver:
       request-timeout: 3
     build-agent:
       ping-path: PingHandler
-
+      running-wait-for: 3
     openshift:
       pod: |
         kind: Pod
