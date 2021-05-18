@@ -142,15 +142,14 @@ public class Driver {
 
         Map<String, String> environmentVariables = new HashMap<>();
 
-        boolean proxyActive = !Strings.isEmpty(configuration.getProxyServer())
-                && !Strings.isEmpty(configuration.getProxyPort());
+        boolean proxyActive = configuration.getProxyServer().isPresent() && configuration.getProxyPort().isPresent();
 
         environmentVariables.put("image", environmentCreateRequest.getImageId());
         environmentVariables.put("firewallAllowedDestinations", configuration.getFirewallAllowedDestinations());
         environmentVariables.put("isHttpActive", Boolean.toString(proxyActive).toLowerCase());
-        environmentVariables.put("proxyServer", configuration.getProxyServer());
-        environmentVariables.put("proxyPort", configuration.getProxyPort());
-        environmentVariables.put("nonProxyHosts", configuration.getNonProxyHosts());
+        environmentVariables.put("proxyServer", configuration.getProxyServer().orElse(""));
+        environmentVariables.put("proxyPort", configuration.getProxyPort().orElse(""));
+        environmentVariables.put("nonProxyHosts", configuration.getNonProxyHosts().orElse(""));
 
         environmentVariables.put("AProxDependencyUrl", environmentCreateRequest.getRepositoryDependencyUrl());
         environmentVariables.put("AProxDeployUrl", environmentCreateRequest.getRepositoryDeployUrl());

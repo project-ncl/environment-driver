@@ -22,8 +22,6 @@ oidc:
         enable: false
 
 environment-driver:
-  proxy-server: http-proxy-host
-  proxy-port: 8080
   working-directory: /tmp
   self-base-url: http://localhost:8081/
   openshift:
