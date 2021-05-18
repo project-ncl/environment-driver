@@ -17,6 +17,8 @@
  */
 package org.jboss.pnc.environmentdriver;
 
+import java.util.Optional;
+
 import javax.enterprise.context.Dependent;
 
 import lombok.Getter;
@@ -40,19 +42,19 @@ public class Configuration {
      * Persistent http proxy hostname
      */
     @ConfigProperty(name = "environment-driver.proxy-server")
-    String proxyServer;
+    Optional<String> proxyServer;
 
     /**
      * Persistent http proxy port
      */
     @ConfigProperty(name = "environment-driver.proxy-port")
-    String proxyPort;
+    Optional<String> proxyPort;
 
     /**
      * List of hosts that are not proxied.
      */
     @ConfigProperty(name = "environment-driver.non-proxy-port", defaultValue = "localhost")
-    String nonProxyHosts;
+    Optional<String> nonProxyHosts;
 
     /**
      * Working directory on the remote environment
