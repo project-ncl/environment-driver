@@ -18,13 +18,21 @@
 
 package org.jboss.pnc.environmentdriver.runtime;
 
+import java.time.Duration;
+import java.time.Instant;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
+
 import javax.enterprise.context.ApplicationScoped;
 import javax.enterprise.event.Observes;
 
 import io.quarkus.runtime.ShutdownEvent;
 import io.quarkus.runtime.StartupEvent;
+import org.eclipse.microprofile.config.ConfigProvider;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.pnc.common.concurrent.Sequence;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * @author <a href="mailto:matejonnet@gmail.com">Matej Lazar</a>
@@ -32,11 +40,16 @@ import org.jboss.pnc.common.concurrent.Sequence;
 @ApplicationScoped
 public class ApplicationLifecycle {
 
+    private static final Logger logger = LoggerFactory.getLogger(ApplicationLifecycle.class);
+
     @ConfigProperty(name = "sequenceGenerator.nodeId", defaultValue = "-1") // nodeId + nodeIdOffset must be < 1024
     int nodeId;
 
     @ConfigProperty(name = "sequenceGenerator.nodeIdOffset", defaultValue = "0") // nodeId + nodeIdOffset must be < 1024
     int nodeIdOffset;
+
+    private AtomicInteger activeOperations = new AtomicInteger();
+    private boolean shuttingDown;
 
     void onStart(@Observes StartupEvent event) {
         if (nodeId > -1) {
@@ -45,5 +58,33 @@ public class ApplicationLifecycle {
     }
 
     void onStop(@Observes ShutdownEvent event) {
+        shuttingDown = true;
+        Duration shutdownTimeout = ConfigProvider.getConfig().getValue("quarkus.shutdown.timeout", Duration.class);
+        Instant shutdownStarted = Instant.now();
+        while (activeOperations.get() > 0) {
+            if (Duration.between(shutdownStarted, Instant.now()).compareTo(shutdownTimeout) > 0) {
+                logger.warn("Reached quarkus.shutdown.timeout: {}", shutdownTimeout.toString());
+                break;
+            }
+            try {
+                logger.info("Waiting for {} operations to complete ...", activeOperations.get());
+                TimeUnit.SECONDS.sleep(1);
+            } catch (InterruptedException e) {
+                logger.warn("Interrupted while waiting for operations to complete.", e);
+                break;
+            }
+        }
+    }
+
+    public void addActiveOperation() {
+        activeOperations.incrementAndGet();
+    }
+
+    public void removeActiveOperation() {
+        activeOperations.decrementAndGet();
+    }
+
+    public boolean isShuttingDown() {
+        return shuttingDown;
     }
 }

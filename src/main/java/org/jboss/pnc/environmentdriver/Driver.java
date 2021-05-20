@@ -68,6 +68,7 @@ import org.jboss.pnc.api.environmentdriver.dto.EnvironmentCreateResponse;
 import org.jboss.pnc.api.environmentdriver.dto.EnvironmentCreateResult;
 import org.jboss.pnc.common.Random;
 import org.jboss.pnc.common.Strings;
+import org.jboss.pnc.environmentdriver.runtime.ApplicationLifecycle;
 import org.jboss.pnc.pncmetrics.GaugeMetric;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -120,6 +121,9 @@ public class Driver {
     @Inject
     java.net.http.HttpClient httpClient;
 
+    @Inject
+    ApplicationLifecycle lifecycle;
+
     ObjectMapper yamlMapper = new ObjectMapper(new YAMLFactory());
 
     private Optional<GaugeMetric> gaugeMetric = Optional.empty(); // TODO
@@ -133,6 +137,9 @@ public class Driver {
      * @return CompletionStage which is completed when all required requests to the Openshift complete.
      */
     public CompletionStage<EnvironmentCreateResponse> create(EnvironmentCreateRequest environmentCreateRequest) {
+        if (lifecycle.isShuttingDown()) {
+            throw new StoppingException();
+        }
         String environmentId = environmentCreateRequest.getEnvironmentLabel() + "-" + Random.randString(6);
 
         String podName = getPodName(environmentId);
@@ -183,12 +190,12 @@ public class Driver {
             sshPassword = "";
         }
 
-        CompletableFuture<Pod> podFuture = CompletableFuture.supplyAsync(() -> {
+        CompletableFuture<Pod> podRequested = CompletableFuture.supplyAsync(() -> {
             Pod podCreationModel = createModelNode(configuration.getPodDefinition(), environmentVariables, Pod.class);
             return openShiftClient.pods().create(podCreationModel);
         }, executor);
 
-        CompletableFuture<Service> serviceFuture = CompletableFuture.supplyAsync(() -> {
+        CompletableFuture<Service> serviceRequested = CompletableFuture.supplyAsync(() -> {
             Service serviceCreationModel = createModelNode(
                     configuration.getServiceDefinition(),
                     environmentVariables,
@@ -196,22 +203,17 @@ public class Driver {
             return openShiftClient.services().create(serviceCreationModel);
         }, executor);
 
-        CompletableFuture<Void> podAndServiceFuture = CompletableFuture.allOf(podFuture, serviceFuture);
+        CompletableFuture<Void> podAndServiceRequested = CompletableFuture.allOf(podRequested, serviceRequested);
 
-        return podAndServiceFuture
-                .thenApplyAsync(
-                        (nul) -> startMonitor(
-                                serviceName,
-                                buildAgentContextPath,
-                                podName,
-                                environmentCreateRequest.getCompletionCallback(),
-                                sshPassword),
-                        executor)
-                .thenApplyAsync(
-                        (nul) -> new EnvironmentCreateResponse(
-                                environmentId,
-                                getCancelRequest(environmentId, rawWebToken)),
-                        executor);
+        return podAndServiceRequested.thenApplyAsync((nul) -> {
+            startMonitor(
+                    serviceName,
+                    buildAgentContextPath,
+                    podName,
+                    environmentCreateRequest.getCompletionCallback(),
+                    sshPassword);
+            return new EnvironmentCreateResponse(environmentId, getCancelRequest(environmentId, rawWebToken));
+        }, executor);
     }
 
     private Request getCancelRequest(String environmentId, String rawWebToken) {
@@ -267,7 +269,7 @@ public class Driver {
         RetryPolicy<InetSocketAddress> retryPolicy = new RetryPolicy<InetSocketAddress>()
                 .withMaxDuration(Duration.ofSeconds(configuration.getSshPingRetryDuration()))
                 .withMaxRetries(Integer.MAX_VALUE) // retry until maxDuration is reached
-                .withBackoff(500, 5000, ChronoUnit.MILLIS)
+                .withBackoff(500, 2000, ChronoUnit.MILLIS) // don't wait too long, the response is waiting
                 .onSuccess(ctx -> logger.info("SSH ping success."))
                 .onRetry(
                         ctx -> logger.warn(
@@ -381,12 +383,13 @@ public class Driver {
         });
     }
 
-    private Void startMonitor(
+    private void startMonitor(
             String serviceName,
             String buildAgentContextPath,
             String podName,
             Request completionCallback,
             String sshPassword) {
+        lifecycle.addActiveOperation();
         CompletableFuture<URI> serviceRunning = isServiceRunning(serviceName);
         activeMonitors.add(podName, serviceRunning);
 
@@ -402,22 +405,29 @@ public class Driver {
         }).handleAsync((serviceUriWithContext, throwable) -> {
             logger.debug("Completing monitor for pod: {}", podName);
             activeMonitors.remove(podName);
+            CompletableFuture<HttpResponse<String>> callback;
             if (throwable != null) {
                 if (throwable instanceof CancellationException) {
-                    callback(completionCallback, EnvironmentCreateResult.cancelled());
+                    callback = callback(completionCallback, EnvironmentCreateResult.cancelled());
                 } else {
-                    callback(completionCallback, EnvironmentCreateResult.failed(throwable));
+                    callback = callback(completionCallback, EnvironmentCreateResult.failed(throwable));
                     gaugeMetric.ifPresent(g -> g.incrementMetric(METRICS_POD_STARTED_FAILED_KEY));
                 }
             } else {
                 EnvironmentCreateResult environmentCreateResult = EnvironmentCreateResult
                         .success(serviceUriWithContext, configuration.getWorkingDirectory(), sshPassword);
-                callback(completionCallback, environmentCreateResult);
+                callback = callback(completionCallback, environmentCreateResult);
                 gaugeMetric.ifPresent(g -> g.incrementMetric(METRICS_POD_STARTED_SUCCESS_KEY));
             }
+            callback.handle((r, t) -> {
+                if (t != null) {
+                    logger.error("Unable to send completion callback.", t);
+                }
+                lifecycle.removeActiveOperation();
+                return null;
+            });
             return null;
         });
-        return null;
     }
 
     /**
@@ -528,7 +538,9 @@ public class Driver {
                                 .thenApply(validateResponse()));
     }
 
-    private void callback(Request callback, EnvironmentCreateResult environmentCreateResult) {
+    private CompletableFuture<HttpResponse<String>> callback(
+            Request callback,
+            EnvironmentCreateResult environmentCreateResult) {
         String body;
         try {
             body = jsonMapper.writeValueAsString(environmentCreateResult);
@@ -578,7 +590,7 @@ public class Driver {
                 callback.getMethod(),
                 callback.getUri(),
                 callback.getHeaders());
-        Failsafe.with(retryPolicy)
+        return Failsafe.with(retryPolicy)
                 .with(executor)
                 .getStageAsync(
                         () -> httpClient.sendAsync(request, HttpResponse.BodyHandlers.ofString())
