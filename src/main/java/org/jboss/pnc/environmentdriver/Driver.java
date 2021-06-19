@@ -97,7 +97,7 @@ public class Driver {
      * 'Error' and 'InvalidImageName' statuses were added as per NCL-6032 investigations
      */
     private static final String[] POD_FAILED_STATUSES = { "Failed", "Unknown", "CrashLoopBackOff", "ErrImagePull",
-            "ImagePullBackOff", "Error", "InvalidImageName" };
+            "ImagePullBackOff", "Error", "InvalidImageName", "ContainerCannotRun" };
 
     @Inject
     JsonWebToken webToken;
@@ -168,7 +168,7 @@ public class Driver {
                 "resourcesMemory",
                 builderPodMemory(configuration.getBuilderPodMemory(), environmentCreateRequest.getPodMemoryOverride()));
 
-        String buildAgentContextPath = "/pnc-ba-" + environmentId;
+        String buildAgentContextPath = getBuildAgentContextPath(environmentId);
 
         environmentVariables.put("environment-label", environmentCreateRequest.getEnvironmentLabel());
         environmentVariables.put("pod-name", podName);
@@ -231,8 +231,8 @@ public class Driver {
         serviceEnvVariables.put("ssh-service-name", getSshServiceName(environmentId));
 
         Map<String, String> routeEnvVariables = new HashMap<>();
-        routeEnvVariables.put("route-name", "pnc-ba-route-" + environmentId);
-        routeEnvVariables.put("route-path", "/pnc-ba-" + environmentId);
+        routeEnvVariables.put("route-name", getRouteName(environmentId));
+        routeEnvVariables.put("route-path", getBuildAgentContextPath(environmentId));
         routeEnvVariables.put("service-name", getServiceName(environmentId));
 
         // Enable ssh forwarding and complete with the port to which ssh is forwarded
@@ -587,6 +587,14 @@ public class Driver {
 
     private String getPodName(String environmentId) {
         return "pnc-ba-pod-" + environmentId;
+    }
+
+    private String getRouteName(String environmentId) {
+        return "pnc-ba-route-" + environmentId;
+    }
+
+    private String getBuildAgentContextPath(String environmentId) {
+        return "/pnc-ba-" + environmentId;
     }
 
     private String getServiceName(String environmentId) {
