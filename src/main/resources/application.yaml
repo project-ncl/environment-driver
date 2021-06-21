@@ -81,15 +81,53 @@ environment-driver:
               - name: buildAgentJvmProperties
                 value: "-DlogMDC=processContext:%{logProcessContext};tmp:%{tempBuild};exp:%{expiresDate}"
             resources:
+              requests:
+                cpu: 2000m
+                memory: "%{resourcesMemory}"
+              limits:
+                cpu: 2000m
+                memory: "%{resourcesMemory}"
             terminationMessagePath: "/dev/termination-log"
-            imagePullPolicy: Always
             securityContext:
               capabilities:
                 add:
                   - NET_ADMIN
+          - name: sidecar
+            image: "quay.io/factory2/indy-sidecar:1.0.0"
+            volumeMounts:
+              - mountPath: "/deployments/config/proxy.yaml"
+                readOnly: true
+                name: "sidecar-config"
+                subPath: "proxy.yaml"
+              - mountPath: "/deployments/config/application.yaml"
+                readOnly: true
+                name: "sidecar-config"
+                subPath: "application.yaml"
+            env:
+              - name: JAVA_OPTS
+                value: "-Xms3G -Xmx3G -Xss256k"
+            resources:
+              requests:
+                cpu: 2000m
+                memory: 4Gi
+              limits:
+                cpu: 2000m
+                memory: 4Gi
+            readinessProbe:
+              httpGet:
+                path: "/q/health"
+                port: 8080
+              failureThreshold: 10
+              periodSeconds: 30
+              timeoutSeconds: 10
         restartPolicy: Never
-        activeDeadlineSeconds: 28800
+        activeDeadlineSeconds: 86400
         dnsPolicy: ClusterFirst
+        volumes:
+          - name: "sidecar-config"
+            configMap:
+              defaultMode: 420
+              name: "indy-master-sidecar-config"
     service: |
       kind: Service
       apiVersion: v1
