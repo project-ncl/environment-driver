@@ -35,6 +35,7 @@ import org.jboss.pnc.api.environmentdriver.dto.EnvironmentCompleteRequest;
 import org.jboss.pnc.api.environmentdriver.dto.EnvironmentCompleteResponse;
 import org.jboss.pnc.api.environmentdriver.dto.EnvironmentCreateRequest;
 import org.jboss.pnc.api.environmentdriver.dto.EnvironmentCreateResponse;
+import org.jboss.pnc.common.Strings;
 import org.jboss.pnc.environmentdriver.Driver;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -79,8 +80,15 @@ public class Public {
             logger.info("Requested environment debug: {}", environmentCompleteRequest.getEnvironmentId());
             return driver.enableDebug(environmentCompleteRequest.getEnvironmentId());
         } else {
-            logger.info("Requested environment destroy: {}", environmentCompleteRequest.getEnvironmentLabel());
-            driver.destroyAll(environmentCompleteRequest.getEnvironmentLabel());
+            if (!Strings.isEmpty(environmentCompleteRequest.getEnvironmentLabel())) {
+                logger.info(
+                        "Requested environment destroyAll by label: {}",
+                        environmentCompleteRequest.getEnvironmentLabel());
+                driver.destroyAll(environmentCompleteRequest.getEnvironmentLabel());
+            } else {
+                logger.info("Requested environment destroy by id: {}", environmentCompleteRequest.getEnvironmentId());
+                driver.destroy(environmentCompleteRequest.getEnvironmentId());
+            }
             return CompletableFuture.completedFuture(new EnvironmentCompleteResponse(null, -1));
         }
     }
