@@ -10,17 +10,16 @@ quarkus:
 #  kubernetes-client:
     #namespace: default
     #token: secretToken
-oidc:
-    auth-server-url: https://keycloak-host/auth/realms/pncredhat
-    client-id: client
-    credentials:
-      secret: secret
-    tls:
-      verification: none
-    keycloak:
-      policy-enforcer:
-        enable: false
-
+  oidc:
+      auth-server-url: https://keycloak-host/auth/realms/pncredhat
+      client-id: client
+      credentials:
+        secret: secret
+      tls:
+        verification: none
+      keycloak:
+        policy-enforcer:
+          enable: false
 environment-driver:
   working-directory: /tmp
   self-base-url: http://localhost:8081/
