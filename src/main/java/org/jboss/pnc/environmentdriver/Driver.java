@@ -101,6 +101,10 @@ public class Driver {
             "ImagePullBackOff", "Error", "InvalidImageName", "ContainerCannotRun" };
 
     @Inject
+    @UserLogger
+    Logger userLogger;
+
+    @Inject
     JsonWebToken webToken;
 
     @Inject
@@ -442,15 +446,18 @@ public class Driver {
                 .withMaxRetries(Integer.MAX_VALUE) // retry until maxDuration is reached
                 .withBackoff(1000, 5000, ChronoUnit.MILLIS)
                 .abortOn(UnableToStartException.class)
-                .onSuccess(ctx -> logger.info("Pod is running: {}.", podName))
+                .onSuccess(ctx -> userLogger.info("Pod is running: {}.", podName))
                 .onRetry(
-                        ctx -> logger.warn(
+                        ctx -> userLogger.warn(
                                 "Pod {} running retry attempt #{}, last error: [{}].",
                                 podName,
                                 ctx.getAttemptCount(),
                                 ctx.getLastFailure().getMessage()))
-                .onFailure(ctx -> logger.error("Unable to start pod {}: {}.", podName, ctx.getFailure().getMessage()))
-                .onAbort(e -> logger.warn("IsPodRunning aborted. Pod {}: {}.", podName, e.getFailure().getMessage()));
+                .onFailure(
+                        ctx -> userLogger.error("Unable to start pod {}: {}.", podName, ctx.getFailure().getMessage()))
+                .onAbort(
+                        e -> userLogger
+                                .warn("IsPodRunning aborted. Pod {}: {}.", podName, e.getFailure().getMessage()));
 
         return Failsafe.with(retryPolicy).with(executor).runAsync(() -> {
             Pod pod = openShiftClient.pods().withName(podName).get();
@@ -475,7 +482,7 @@ public class Driver {
                 .withMaxRetries(Integer.MAX_VALUE) // retry until maxDuration is reached
                 .withBackoff(500, 5000, ChronoUnit.MILLIS)
                 .onRetry(
-                        ctx -> logger.warn(
+                        ctx -> userLogger.warn(
                                 "Is service running retry attempt:{}, last error:{}",
                                 ctx.getAttemptCount(),
                                 ctx.getLastFailure()));
@@ -490,7 +497,7 @@ public class Driver {
             if (clusterIP == null) {
                 throw new DriverException("Service " + serviceName + " is not running.");
             } else {
-                logger.info("Service up: {} ip: {}.", serviceName, clusterIP);
+                userLogger.info("Service up: {} ip: {}.", serviceName, clusterIP);
                 return URI.create(configuration.getBuildAgentServiceScheme() + "://" + clusterIP + ":" + clusterPort);
             }
         });
