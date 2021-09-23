@@ -11,12 +11,16 @@ import javax.inject.Inject;
 import javax.net.ssl.SSLContext;
 
 import org.eclipse.microprofile.context.ManagedExecutor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * @author <a href="mailto:matejonnet@gmail.com">Matej Lazar</a>
  */
 @ApplicationScoped
 public class BeanFactory {
+
+    public static final Logger userLogger = LoggerFactory.getLogger("org.jboss.pnc._userlog_.envdriver");
 
     @Inject
     Configuration configuration;
@@ -33,6 +37,13 @@ public class BeanFactory {
                 .executor(executor)
                 .connectTimeout(Duration.ofSeconds(configuration.getHttpClientConnectTimeout()))
                 .build();
+    }
+
+    @UserLogger
+    @Produces
+    @ApplicationScoped
+    public Logger getUserLogger() {
+        return userLogger;
     }
 
     @Produces

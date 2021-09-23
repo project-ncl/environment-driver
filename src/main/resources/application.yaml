@@ -7,6 +7,17 @@ quarkus:
         level: DEBUG
     console:
       format: "%d{HH:mm:ss,SSS} %-5p [%c{3.}] (%t) %s%e mdc:[%X]%n"
+    handler:
+      kafka:
+        enabled: false
+        broker-list: kafka.example.com:443
+        topic: kafka-topic
+        security-protocol: SSL
+        ssl-truststore-location: /mnt/kafka-client-truststore.jks
+        ssl-truststore-password: none
+#        async: true
+#        async-queue-length: 1024
+#        async-overflow-action: BLOCK
 #  kubernetes-client:
     #namespace: default
     #token: secretToken
