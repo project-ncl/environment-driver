@@ -15,7 +15,7 @@ quarkus:
         security-protocol: SSL
         ssl-truststore-location: /mnt/kafka-client-truststore.jks
         ssl-truststore-password: none
-#        async: true
+        async: false
 #        async-queue-length: 1024
 #        async-overflow-action: BLOCK
 #  kubernetes-client:
