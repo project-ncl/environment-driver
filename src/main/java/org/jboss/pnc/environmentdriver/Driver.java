@@ -100,8 +100,8 @@ public class Driver {
      *
      * 'Error' and 'InvalidImageName' statuses were added as per NCL-6032 investigations
      */
-    private static final String[] POD_FAILED_STATUSES = { "Failed", "Unknown", "CrashLoopBackOff", "ErrImagePull",
-            "ImagePullBackOff", "Error", "InvalidImageName", "ContainerCannotRun" };
+    private static final String[] POD_FAILED_STATUSES = {"Failed", "Unknown", "CrashLoopBackOff", "ErrImagePull",
+            "ImagePullBackOff", "Error", "InvalidImageName", "ContainerCannotRun"};
 
     @Inject
     @UserLogger
@@ -446,7 +446,6 @@ public class Driver {
      *
      * @param quantity quantity to convert
      * @return converted unit
-     *
      * @throws RuntimeException if it does not know how to convert the unit
      */
     private static double convertQuantity(Quantity quantity) {
@@ -514,6 +513,11 @@ public class Driver {
             String podStatus = pod.getStatus().getPhase();
             logger.debug("Pod {} status: {}", pod.getMetadata().getName(), podStatus);
             if (Arrays.asList(POD_FAILED_STATUSES).contains(podStatus)) {
+                if (podStatus.toLowerCase().contains("image")) {
+                    userLogger.warn("The builder pod failed to start because it was not able " +
+                            "to download the builder image (this could be due to issues " +
+                            "with the builder images registry, or a misconfiguration of the builder image name).");
+                }
                 gaugeMetric.ifPresent(g -> g.incrementMetric(METRICS_POD_STARTED_FAILED_REASON_KEY + "." + podStatus));
                 throw new UnableToStartException("Pod failed with status: " + podStatus);
             }
