@@ -48,6 +48,9 @@ import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 import io.fabric8.kubernetes.api.model.HasMetadata;
 import io.fabric8.kubernetes.api.model.Pod;
 import io.fabric8.kubernetes.api.model.PodList;
+import io.fabric8.kubernetes.api.model.Quantity;
+import io.fabric8.kubernetes.api.model.ResourceQuota;
+import io.fabric8.kubernetes.api.model.ResourceQuotaStatus;
 import io.fabric8.kubernetes.api.model.Service;
 import io.fabric8.kubernetes.api.model.ServiceList;
 import io.fabric8.kubernetes.api.model.ServicePort;
@@ -435,6 +438,34 @@ public class Driver {
     }
 
     /**
+     * Tries to convert the Quantity value into the same units
+     *
+     * If the value unit is blank, return the value itself
+     * If the value unit is Gi / Mi, return the value in Gi unit
+     * If the value unit is m, return the original value / 1024
+     *
+     * @param quantity quantity to convert
+     * @return converted unit
+     *
+     * @throws RuntimeException if it does not know how to convert the unit
+     */
+    private static double convertQuantity(Quantity quantity) {
+        String unit = quantity.getFormat();
+        double value = Double.parseDouble(quantity.getAmount());
+
+        switch (unit) {
+            case "":
+            case "Gi":
+                return value;
+            case "Mi":
+            case "m":
+                return value / 1024;
+            default:
+                throw new RuntimeException("Don't know how to convert the unit " + quantity);
+        }
+    }
+
+    /**
      * Check if pod is in running state. If pod is in one of the failure statuses (as specified in POD_FAILED_STATUSES,
      * {@link CompletableFuture} is completed with {@link UnableToStartException}
      *
@@ -447,12 +478,31 @@ public class Driver {
                 .withBackoff(1000, 5000, ChronoUnit.MILLIS)
                 .abortOn(UnableToStartException.class)
                 .onSuccess(ctx -> userLogger.info("Pod is running: {}.", podName))
-                .onRetry(
-                        ctx -> userLogger.warn(
-                                "Pod {} running retry attempt #{}, last error: [{}].",
-                                podName,
-                                ctx.getAttemptCount(),
-                                ctx.getLastFailure().getMessage()))
+                .onRetry(ctx -> {
+                    String availableCpu = "unknown";
+                    String availableMemory = "unknown";
+                    List<ResourceQuota> quotas = openShiftClient.resourceQuotas().list().getItems();
+                    // Only consider the first quota, we generally only use one!
+                    Optional<ResourceQuota> resourceQuota = quotas.stream().findFirst();
+                    if (resourceQuota.isPresent()) {
+                        ResourceQuotaStatus quotaStatus = resourceQuota.get().getStatus();
+                        Map<String, Quantity> hardLimit = quotaStatus.getHard();
+                        Map<String, Quantity> used = quotaStatus.getUsed();
+                        availableCpu = String.format("%.2f",
+                                convertQuantity(hardLimit.get("limits.cpu"))
+                                        - convertQuantity(used.get("limits.cpu")));
+                        availableMemory = String.format("%.0f",
+                                convertQuantity(hardLimit.get("limits.memory"))
+                                        - convertQuantity(used.get("limits.memory")));
+                    }
+                    userLogger.warn(
+                            "Pod {} running retry attempt #{}; Available resources: {}GB {}cpu; Last error: [{}].",
+                            podName,
+                            ctx.getAttemptCount(),
+                            availableMemory,
+                            availableCpu,
+                            ctx.getLastFailure().getMessage());
+                })
                 .onFailure(
                         ctx -> userLogger.error("Unable to start pod {}: {}.", podName, ctx.getFailure().getMessage()))
                 .onAbort(
