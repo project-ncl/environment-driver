@@ -49,8 +49,6 @@ import io.fabric8.kubernetes.api.model.HasMetadata;
 import io.fabric8.kubernetes.api.model.Pod;
 import io.fabric8.kubernetes.api.model.PodList;
 import io.fabric8.kubernetes.api.model.Quantity;
-import io.fabric8.kubernetes.api.model.ResourceQuota;
-import io.fabric8.kubernetes.api.model.ResourceQuotaStatus;
 import io.fabric8.kubernetes.api.model.Service;
 import io.fabric8.kubernetes.api.model.ServiceList;
 import io.fabric8.kubernetes.api.model.ServicePort;
@@ -100,8 +98,8 @@ public class Driver {
      *
      * 'Error' and 'InvalidImageName' statuses were added as per NCL-6032 investigations
      */
-    private static final String[] POD_FAILED_STATUSES = {"Failed", "Unknown", "CrashLoopBackOff", "ErrImagePull",
-            "ImagePullBackOff", "Error", "InvalidImageName", "ContainerCannotRun"};
+    private static final String[] POD_FAILED_STATUSES = { "Failed", "Unknown", "CrashLoopBackOff", "ErrImagePull",
+            "ImagePullBackOff", "Error", "InvalidImageName", "ContainerCannotRun" };
 
     @Inject
     @UserLogger
@@ -441,7 +439,9 @@ public class Driver {
      * Tries to convert the Quantity value into the same units
      *
      * If the value unit is blank, return the value itself
+     * 
      * If the value unit is Gi / Mi, return the value in Gi unit
+     * 
      * If the value unit is m, return the original value / 1024
      *
      * @param quantity quantity to convert
@@ -464,6 +464,29 @@ public class Driver {
         }
     }
 
+    private double calculateResourceUsedByPod(String podName, String resourceType) {
+        return openShiftClient.top()
+                .pods()
+                .metrics(openShiftClient.pods().withName(podName).get().getMetadata().getNamespace(), podName)
+                .getContainers()
+                .stream()
+                .mapToDouble(containerMetrics -> convertQuantity(containerMetrics.getUsage().get(resourceType)))
+                .sum();
+    }
+
+    private double calculateAvailableResource(String resourceType) {
+        String identifier = "limits." + resourceType;
+        return openShiftClient.resourceQuotas()
+                .list()
+                .getItems()
+                .stream()
+                .findFirst() // Only consider the first quota, we generally only use one!
+                .map(
+                        resourceQuota -> convertQuantity(resourceQuota.getStatus().getHard().get(identifier))
+                                - convertQuantity(resourceQuota.getStatus().getUsed().get(identifier)))
+                .orElse(0.0);
+    }
+
     /**
      * Check if pod is in running state. If pod is in one of the failure statuses (as specified in POD_FAILED_STATUSES,
      * {@link CompletableFuture} is completed with {@link UnableToStartException}
@@ -477,31 +500,17 @@ public class Driver {
                 .withBackoff(1000, 5000, ChronoUnit.MILLIS)
                 .abortOn(UnableToStartException.class)
                 .onSuccess(ctx -> userLogger.info("Pod is running: {}.", podName))
-                .onRetry(ctx -> {
-                    String availableCpu = "unknown";
-                    String availableMemory = "unknown";
-                    List<ResourceQuota> quotas = openShiftClient.resourceQuotas().list().getItems();
-                    // Only consider the first quota, we generally only use one!
-                    Optional<ResourceQuota> resourceQuota = quotas.stream().findFirst();
-                    if (resourceQuota.isPresent()) {
-                        ResourceQuotaStatus quotaStatus = resourceQuota.get().getStatus();
-                        Map<String, Quantity> hardLimit = quotaStatus.getHard();
-                        Map<String, Quantity> used = quotaStatus.getUsed();
-                        availableCpu = String.format("%.2f",
-                                convertQuantity(hardLimit.get("limits.cpu"))
-                                        - convertQuantity(used.get("limits.cpu")));
-                        availableMemory = String.format("%.0f",
-                                convertQuantity(hardLimit.get("limits.memory"))
-                                        - convertQuantity(used.get("limits.memory")));
-                    }
-                    userLogger.warn(
-                            "Pod {} running retry attempt #{}; Available resources: {}GB {}cpu; Last error: [{}].",
-                            podName,
-                            ctx.getAttemptCount(),
-                            availableMemory,
-                            availableCpu,
-                            ctx.getLastFailure().getMessage());
-                })
+                .onRetry(
+                        ctx -> userLogger.warn(
+                                "Pod {} running retry attempt #{}; Requested resources: {}GB {}cpu;"
+                                        + "Available resources: {}GB {}cpu; Last error: [{}].",
+                                podName,
+                                ctx.getAttemptCount(),
+                                String.format("%.2f", calculateResourceUsedByPod(podName, "memory")),
+                                String.format("%.0f", calculateResourceUsedByPod(podName, "cpu")),
+                                String.format("%.2f", calculateAvailableResource("memory")),
+                                String.format("%.0f", calculateAvailableResource("cpu")),
+                                ctx.getLastFailure().getMessage()))
                 .onFailure(
                         ctx -> userLogger.error("Unable to start pod {}: {}.", podName, ctx.getFailure().getMessage()))
                 .onAbort(
@@ -514,9 +523,10 @@ public class Driver {
             logger.debug("Pod {} status: {}", pod.getMetadata().getName(), podStatus);
             if (Arrays.asList(POD_FAILED_STATUSES).contains(podStatus)) {
                 if (podStatus.toLowerCase().contains("image")) {
-                    userLogger.warn("The builder pod failed to start because it was not able " +
-                            "to download the builder image (this could be due to issues " +
-                            "with the builder images registry, or a misconfiguration of the builder image name).");
+                    userLogger.warn(
+                            "The builder pod failed to start because it was not able "
+                                    + "to download the builder image (this could be due to issues with the builder "
+                                    + "images registry, or a misconfiguration of the builder image name).");
                 }
                 gaugeMetric.ifPresent(g -> g.incrementMetric(METRICS_POD_STARTED_FAILED_REASON_KEY + "." + podStatus));
                 throw new UnableToStartException("Pod failed with status: " + podStatus);
