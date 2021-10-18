@@ -141,7 +141,12 @@ public class Driver {
      *
      * @return CompletionStage which is completed when all required requests to the Openshift complete.
      */
-    public CompletionStage<EnvironmentCreateResponse> create(EnvironmentCreateRequest environmentCreateRequest) {
+    public CompletionStage<EnvironmentCreateResponse> create(
+            EnvironmentCreateRequest environmentCreateRequest,
+            Optional<String> logUserId,
+            Optional<String> logRequestContext,
+            Optional<String> logProcessContext) {
+
         if (lifecycle.isShuttingDown()) {
             throw new StoppingException();
         }
@@ -169,6 +174,10 @@ public class Driver {
         environmentVariables.put("containerPort", configuration.getBuildAgentContainerPort());
         environmentVariables.put("buildContentId", environmentCreateRequest.getRepositoryBuildContentId());
         environmentVariables.put("accessToken", rawWebToken);
+
+        logUserId.ifPresent(userId -> environmentVariables.put("logUserId", userId));
+        logRequestContext.ifPresent(requestContext -> environmentVariables.put("logRequestContext", requestContext));
+        logProcessContext.ifPresent(processContext -> environmentVariables.put("logProcessContext", processContext));
 
         try {
             environmentVariables.putAll(mdcToMap());

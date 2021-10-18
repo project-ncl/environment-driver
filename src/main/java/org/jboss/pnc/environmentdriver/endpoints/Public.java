@@ -18,11 +18,13 @@
 
 package org.jboss.pnc.environmentdriver.endpoints;
 
+import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 
 import javax.inject.Inject;
 import javax.ws.rs.Consumes;
+import javax.ws.rs.HeaderParam;
 import javax.ws.rs.POST;
 import javax.ws.rs.PUT;
 import javax.ws.rs.Path;
@@ -61,9 +63,17 @@ public class Public {
     @Authenticated
     @POST
     @Path("/create")
-    public CompletionStage<EnvironmentCreateResponse> create(EnvironmentCreateRequest environmentCreateRequest) {
+    public CompletionStage<EnvironmentCreateResponse> create(
+            @HeaderParam("log-user-id") String logUserId,
+            @HeaderParam("log-request-context") String logRequestContext,
+            @HeaderParam("log-process-context") String logProcessContext,
+            EnvironmentCreateRequest environmentCreateRequest) {
         logger.info("Requested new environment: {}", environmentCreateRequest.getEnvironmentLabel());
-        return driver.create(environmentCreateRequest);
+        return driver.create(
+                environmentCreateRequest,
+                Optional.ofNullable(logUserId),
+                Optional.ofNullable(logRequestContext),
+                Optional.ofNullable(logProcessContext));
     }
 
     /**
