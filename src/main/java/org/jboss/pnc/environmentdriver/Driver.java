@@ -158,6 +158,8 @@ public class Driver {
 
         environmentVariables.put("image", environmentCreateRequest.getImageId());
         environmentVariables.put("firewallAllowedDestinations", configuration.getFirewallAllowedDestinations());
+        environmentVariables
+                .put("allowedHttpOutgoingDestinations", configuration.getAllowedHttpOutgoingDestinations().orElse(""));
         environmentVariables.put("isHttpActive", Boolean.toString(proxyActive).toLowerCase());
         environmentVariables.put("proxyServer", configuration.getProxyServer().orElse(""));
         environmentVariables.put("proxyPort", configuration.getProxyPort().orElse(""));

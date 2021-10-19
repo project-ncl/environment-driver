@@ -39,6 +39,12 @@ public class Configuration {
     String firewallAllowedDestinations;
 
     /**
+     * Destinations that are allowed to go through the firewall
+     */
+    @ConfigProperty(name = "environment-driver.allowed-http-outgoing-destinations")
+    Optional<String> allowedHttpOutgoingDestinations;
+
+    /**
      * Persistent http proxy hostname
      */
     @ConfigProperty(name = "environment-driver.proxy-server")
@@ -53,7 +59,7 @@ public class Configuration {
     /**
      * List of hosts that are not proxied.
      */
-    @ConfigProperty(name = "environment-driver.non-proxy-port", defaultValue = "localhost")
+    @ConfigProperty(name = "environment-driver.non-proxy-hosts", defaultValue = "localhost")
     Optional<String> nonProxyHosts;
 
     /**
