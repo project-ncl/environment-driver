@@ -74,6 +74,9 @@ public class Configuration {
     @ConfigProperty(name = "environment-driver.build-agent.container-port", defaultValue = "8080")
     String buildAgentContainerPort;
 
+    @ConfigProperty(name = "environment-driver.build-agent.host", defaultValue = "localhost")
+    String buildAgentHost;
+
     @ConfigProperty(name = "environment-driver.build-agent.ping-path", defaultValue = "/")
     String buildAgentPingPath;
 

@@ -157,6 +157,7 @@ environment-driver:
       request-timeout: 3
     build-agent:
       ping-path: PingHandler
+      host: localhost
       running-wait-for: 3
     openshift:
       pod: |
