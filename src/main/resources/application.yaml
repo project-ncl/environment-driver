@@ -123,8 +123,6 @@ environment-driver:
       apiVersion: v1
       metadata:
         name: "%{ssh-service-name}"
-        labels:
-          environment: "%{environment-label}"
       spec:
         ports:
           - name: 2222-ssh
