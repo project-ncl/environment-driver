@@ -183,7 +183,6 @@ public class Driver {
                 builderPodMemory(configuration.getBuilderPodMemory(), environmentCreateRequest.getPodMemoryOverride()));
 
         String buildAgentContextPath = getBuildAgentContextPath(environmentId);
-
         environmentVariables.put("environment-label", environmentCreateRequest.getEnvironmentLabel());
         environmentVariables.put("pod-name", podName);
         environmentVariables.put("service-name", serviceName);
@@ -243,6 +242,7 @@ public class Driver {
         routeEnvVariables.put("route-name", getRouteName(environmentId));
         routeEnvVariables.put("route-path", getBuildAgentContextPath(environmentId));
         routeEnvVariables.put("service-name", getServiceName(environmentId));
+        routeEnvVariables.put("build-agent-host", configuration.getBuildAgentHost());
 
         // Enable ssh forwarding and complete with the port to which ssh is forwarded
         return CompletableFuture.supplyAsync(() -> {
