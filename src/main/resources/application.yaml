@@ -32,9 +32,30 @@ quarkus:
         policy-enforcer:
           enable: false
 environment-driver:
+  build-agent:
+    service-scheme: http
+    container-port: 8080
+    host: localhost
+    ping-path: /
+    running-wait-for: 30
+  http-client:
+    connect-timeout: 5
+    request-timeout: 15
+  builder-pod-memory: 4
+  firewall-allowed-destinations: 127.0.0.1
+  allowed-http-outgoing-destinations:
+  proxy-server:
+  proxy-port:
+  non-proxy-hosts: localhost
   working-directory: /tmp
   self-base-url: http://localhost:8081/
+  pod-running-wait-for: 600
+  service-running-wait-for: 60
+  ssh-ping-retry-duration:15
+  callback-retry-duration: 300
+  destroy-retry-duration: 3600
   openshift:
+    ssh-service-port-name: 2222-ssh
     pod: |
       kind: Pod
       apiVersion: v1
@@ -91,14 +112,21 @@ environment-driver:
               - name: buildAgentJvmProperties
                 value: "-DlogMDC=processContext:%{logProcessContext};tmp:%{tempBuild};exp:%{expiresDate}"
             resources:
+              requests:
+                cpu: 2000m
+                memory: "%{resourcesMemory}"
+              limits:
+                cpu: 2000m
+                memory: "%{resourcesMemory}"
             terminationMessagePath: "/dev/termination-log"
             imagePullPolicy: Always
             securityContext:
               capabilities:
                 add:
                   - NET_ADMIN
+
         restartPolicy: Never
-        activeDeadlineSeconds: 28800
+        activeDeadlineSeconds: 86400
         dnsPolicy: ClusterFirst
     service: |
       kind: Service
