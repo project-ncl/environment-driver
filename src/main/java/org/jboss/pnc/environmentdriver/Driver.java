@@ -276,7 +276,10 @@ public class Driver {
         RetryPolicy<InetSocketAddress> retryPolicy = new RetryPolicy<InetSocketAddress>()
                 .withMaxDuration(Duration.ofSeconds(configuration.getSshPingRetryDuration()))
                 .withMaxRetries(Integer.MAX_VALUE) // retry until maxDuration is reached
-                .withBackoff(500, 2000, ChronoUnit.MILLIS) // don't wait too long, the response is waiting
+                .withBackoff(
+                        configuration.getSshPingRetryDelayMsec(),
+                        configuration.getSshPingRetryMaxDelayMsec(),
+                        ChronoUnit.MILLIS) // don't wait too long, the response is waiting
                 .onSuccess(ctx -> logger.info("SSH ping success."))
                 .onRetry(
                         ctx -> logger.warn(
@@ -342,7 +345,10 @@ public class Driver {
     private RetryPolicy<String> getDestroyRetryPolicy(String resourceName) {
         return new RetryPolicy<String>().withMaxDuration(Duration.ofSeconds(configuration.getDestroyRetryDuration()))
                 .withMaxRetries(Integer.MAX_VALUE) // retry until maxDuration is reached
-                .withBackoff(1000, 10000, ChronoUnit.MILLIS)
+                .withBackoff(
+                        configuration.getDestroyRetryDelayMsec(),
+                        configuration.getDestroyRetryMaxDelayMsec(),
+                        ChronoUnit.MILLIS)
                 .onSuccess(ctx -> logger.info("Destroy {} success.", resourceName))
                 .onRetry(
                         ctx -> logger.warn(
@@ -499,7 +505,10 @@ public class Driver {
         RetryPolicy<String> retryPolicy = new RetryPolicy<String>()
                 .withMaxDuration(Duration.ofSeconds(configuration.getPodRunningWaitFor()))
                 .withMaxRetries(Integer.MAX_VALUE) // retry until maxDuration is reached
-                .withBackoff(1000, 5000, ChronoUnit.MILLIS)
+                .withBackoff(
+                        configuration.getPodRunningRetryDelayMsec(),
+                        configuration.getPodRunningRetryMaxDelayMsec(),
+                        ChronoUnit.MILLIS)
                 .abortOn(UnableToStartException.class)
                 .onSuccess(ctx -> userLogger.info("Pod is running: {}.", podName))
                 .onRetry(
@@ -546,7 +555,10 @@ public class Driver {
         RetryPolicy<Object> retryPolicy = new RetryPolicy<>()
                 .withMaxDuration(Duration.ofSeconds(configuration.getServiceRunningWaitFor()))
                 .withMaxRetries(Integer.MAX_VALUE) // retry until maxDuration is reached
-                .withBackoff(500, 5000, ChronoUnit.MILLIS)
+                .withBackoff(
+                        configuration.getServiceRunningRetryDelayMsec(),
+                        configuration.getServiceRunningRetryMaxDelayMsec(),
+                        ChronoUnit.MILLIS)
                 .onRetry(
                         ctx -> userLogger.warn(
                                 "Is service running retry attempt:{}, last error:{}",
@@ -578,7 +590,10 @@ public class Driver {
         RetryPolicy<HttpResponse<String>> retryPolicy = new RetryPolicy<HttpResponse<String>>()
                 .withMaxDuration(Duration.ofSeconds(configuration.getBuildAgentRunningWaitFor()))
                 .withMaxRetries(Integer.MAX_VALUE) // retry until maxDuration is reached
-                .withBackoff(500, 2000, ChronoUnit.MILLIS)
+                .withBackoff(
+                        configuration.getBuildAgentRunningRetryDelayMsec(),
+                        configuration.getBuildAgentRunningRetryMaxDelayMsec(),
+                        ChronoUnit.MILLIS)
                 .onSuccess(
                         ctx -> logger.info("BuildAgent responded, response status: {}.", ctx.getResult().statusCode()))
                 .onRetry(ctx -> {
@@ -631,7 +646,10 @@ public class Driver {
         RetryPolicy<HttpResponse<String>> retryPolicy = new RetryPolicy<HttpResponse<String>>()
                 .withMaxDuration(Duration.ofSeconds(configuration.getCallbackRetryDuration()))
                 .withMaxRetries(Integer.MAX_VALUE) // retry until maxDuration is reached
-                .withBackoff(500, 5000, ChronoUnit.MILLIS)
+                .withBackoff(
+                        configuration.getCallbackRetryDelayMsec(),
+                        configuration.getCallbackRetryMaxDelayMsec(),
+                        ChronoUnit.MILLIS)
                 .onSuccess(
                         ctx -> logger.info(
                                 "Callback sent to: {}, response status: {}.",

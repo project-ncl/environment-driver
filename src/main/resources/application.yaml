@@ -38,6 +38,8 @@ environment-driver:
     host: localhost
     ping-path: /
     running-wait-for: 30
+    running-retry-delay-msec: 500
+    running-retry-max-delay-msec: 2000
   http-client:
     connect-timeout: 5
     request-timeout: 15
@@ -51,9 +53,19 @@ environment-driver:
   self-base-url: http://localhost:8081/
   pod-running-wait-for: 600
   service-running-wait-for: 60
-  ssh-ping-retry-duration:15
+  ssh-ping-retry-duration: 15
   callback-retry-duration: 300
   destroy-retry-duration: 3600
+  ssh-ping-retry-delay-msec: 500
+  ssh-ping-retry-max-delay-msec: 2000
+  destroy-retry-delay-msec: 1000
+  destroy-retry-max-delay-msec: 10000
+  pod-running-retry-delay-msec: 1000
+  pod-running-retry-max-delay-msec: 5000
+  service-running-retry-delay-msec: 500
+  service-running-retry-max-delay-msec: 5000
+  callback-retry-delay-msec: 500
+  callback-retry-max-delay-msec: 5000
   openshift:
     ssh-service-port-name: 2222-ssh
     pod: |

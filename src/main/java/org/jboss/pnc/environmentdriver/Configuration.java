@@ -125,4 +125,40 @@ public class Configuration {
     @ConfigProperty(name = "environment-driver.callback-retry-duration", defaultValue = "300")
     long callbackRetryDuration;
 
+    @ConfigProperty(name = "environment-driver.build-agent.running-retry-delay-msec", defaultValue = "500")
+    long buildAgentRunningRetryDelayMsec;
+
+    @ConfigProperty(name = "environment-driver.build-agent.running-retry-max-delay-msec", defaultValue = "2000")
+    long buildAgentRunningRetryMaxDelayMsec;
+
+    @ConfigProperty(name = "environment-driver.ssh-ping-retry-delay-msec", defaultValue = "500")
+    long sshPingRetryDelayMsec;
+
+    @ConfigProperty(name = "environment-driver.ssh-ping-retry-max-delay-msec", defaultValue = "2000")
+    long sshPingRetryMaxDelayMsec;
+
+    @ConfigProperty(name = "environment-driver.destroy-retry-delay-msec", defaultValue = "1000")
+    long destroyRetryDelayMsec;
+
+    @ConfigProperty(name = "environment-driver.destroy-retry-max-delay-msec", defaultValue = "10000")
+    long destroyRetryMaxDelayMsec;
+
+    @ConfigProperty(name = "environment-driver.pod-running-retry-delay-msec", defaultValue = "1000")
+    long podRunningRetryDelayMsec;
+
+    @ConfigProperty(name = "environment-driver.pod-running-retry-max-delay-msec", defaultValue = "5000")
+    long podRunningRetryMaxDelayMsec;
+
+    @ConfigProperty(name = "environment-driver.service-running-retry-delay-msec", defaultValue = "500")
+    long serviceRunningRetryDelayMsec;
+
+    @ConfigProperty(name = "environment-driver.service-running-retry-max-delay-msec", defaultValue = "5000")
+    long serviceRunningRetryMaxDelayMsec;
+
+    @ConfigProperty(name = "environment-driver.callback-retry-delay-msec", defaultValue = "500")
+    long callbackRetryDelayMsec;
+
+    @ConfigProperty(name = "environment-driver.callback-retry-max-delay-msec", defaultValue = "5000")
+    long callbackRetryMaxDelayMsec;
+
 }
