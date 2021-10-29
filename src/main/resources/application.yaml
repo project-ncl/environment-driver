@@ -113,10 +113,10 @@ environment-driver:
                 value: "%{workerUserPassword}"
               - name: accessToken
                 value: "%{accessToken}"
-              - name: logUserId
-                value: "%{logUserId}"
-              - name: logProcessContext
-                value: "%{logProcessContext}"
+              - name: log-user-id
+                value: "%{log-user-id}"
+              - name: log-process-context
+                value: "%{log-process-context}"
               - name: buildContentId
                 value: "%{buildContentId}"
               - name: buildAgentArguments
@@ -247,10 +247,10 @@ environment-driver:
                   value: "%{workerUserPassword}"
                 - name: accessToken
                   value: "%{accessToken}"
-                - name: logUserId
-                  value: "%{logUserId}"
-                - name: logProcessContext
-                  value: "%{logProcessContext}"
+                - name: log-user-id
+                  value: "%{log-user-id}"
+                - name: log-process-context
+                  value: "%{log-process-context}"
                 - name: buildContentId
                   value: "%{buildContentId}"
                 - name: buildAgentArguments
