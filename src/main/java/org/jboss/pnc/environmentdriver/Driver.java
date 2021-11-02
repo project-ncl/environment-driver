@@ -714,7 +714,7 @@ public class Driver {
             throw new DriverException("Missing MDC map.");
         }
         if (mdcMap.get(mdcHeaderKeys.getMdcKey()) != null) {
-            result.put(mdcHeaderKeys.getHeaderName(), mdcMap.get(mdcHeaderKeys.getMdcKey()));
+            result.put(mdcHeaderKeys.getMdcKey(), mdcMap.get(mdcHeaderKeys.getMdcKey()));
         } else {
             throw new DriverException("Missing MDC value " + mdcHeaderKeys.getMdcKey());
         }
