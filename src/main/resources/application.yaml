@@ -114,15 +114,15 @@ environment-driver:
               - name: accessToken
                 value: "%{accessToken}"
               - name: logUserId
-                value: "%{logUserId}"
+                value: "%{userId}"
               - name: logProcessContext
-                value: "%{logProcessContext}"
+                value: "%{processContext}"
               - name: buildContentId
                 value: "%{buildContentId}"
               - name: buildAgentArguments
                 value: "-b 0.0.0.0 -p %{containerPort} -pl FILE -l /tmp -c %{buildAgentContextPath}"
               - name: buildAgentJvmProperties
-                value: "-DlogMDC=processContext:%{logProcessContext};tmp:%{tempBuild};exp:%{expiresDate}"
+                value: "-DlogMDC=processContext:%{processContext};tmp:%{tmp};exp:%{exp}"
             resources:
               requests:
                 cpu: 2000m
@@ -248,15 +248,15 @@ environment-driver:
                 - name: accessToken
                   value: "%{accessToken}"
                 - name: logUserId
-                  value: "%{logUserId}"
+                  value: "%{userId}"
                 - name: logProcessContext
-                  value: "%{logProcessContext}"
+                  value: "%{processContext}"
                 - name: buildContentId
                   value: "%{buildContentId}"
                 - name: buildAgentArguments
                   value: "-b 0.0.0.0 -p %{containerPort} -pl FILE -l /tmp -c %{buildAgentContextPath}"
                 - name: buildAgentJvmProperties
-                  value: "-DlogMDC=processContext:%{logProcessContext};tmp:%{tempBuild};exp:%{expiresDate}"
+                  value: "-DlogMDC=processContext:%{processContext};tmp:%{tmp};exp:%{exp}"
               resources:
               terminationMessagePath: "/dev/termination-log"
               imagePullPolicy: Always
