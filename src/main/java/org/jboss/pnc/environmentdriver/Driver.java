@@ -152,59 +152,59 @@ public class Driver {
 
         String rawWebToken = webToken.getRawToken();
 
-        Map<String, String> environmentVariables = new HashMap<>();
+        Map<String, String> podTemplateProperties = new HashMap<>();
 
         boolean proxyActive = configuration.getProxyServer().isPresent() && configuration.getProxyPort().isPresent();
 
-        environmentVariables.put("image", environmentCreateRequest.getImageId());
-        environmentVariables.put("firewallAllowedDestinations", configuration.getFirewallAllowedDestinations());
-        environmentVariables
+        podTemplateProperties.put("image", environmentCreateRequest.getImageId());
+        podTemplateProperties.put("firewallAllowedDestinations", configuration.getFirewallAllowedDestinations());
+        podTemplateProperties
                 .put("allowedHttpOutgoingDestinations", configuration.getAllowedHttpOutgoingDestinations().orElse(""));
-        environmentVariables.put("isHttpActive", Boolean.toString(proxyActive).toLowerCase());
-        environmentVariables.put("proxyServer", configuration.getProxyServer().orElse(""));
-        environmentVariables.put("proxyPort", configuration.getProxyPort().orElse(""));
-        environmentVariables.put("nonProxyHosts", configuration.getNonProxyHosts().orElse(""));
+        podTemplateProperties.put("isHttpActive", Boolean.toString(proxyActive).toLowerCase());
+        podTemplateProperties.put("proxyServer", configuration.getProxyServer().orElse(""));
+        podTemplateProperties.put("proxyPort", configuration.getProxyPort().orElse(""));
+        podTemplateProperties.put("nonProxyHosts", configuration.getNonProxyHosts().orElse(""));
 
-        environmentVariables.put("AProxDependencyUrl", environmentCreateRequest.getRepositoryDependencyUrl());
-        environmentVariables.put("AProxDeployUrl", environmentCreateRequest.getRepositoryDeployUrl());
+        podTemplateProperties.put("AProxDependencyUrl", environmentCreateRequest.getRepositoryDependencyUrl());
+        podTemplateProperties.put("AProxDeployUrl", environmentCreateRequest.getRepositoryDeployUrl());
 
-        environmentVariables.put("containerPort", configuration.getBuildAgentContainerPort());
-        environmentVariables.put("buildContentId", environmentCreateRequest.getRepositoryBuildContentId());
-        environmentVariables.put("accessToken", rawWebToken);
+        podTemplateProperties.put("containerPort", configuration.getBuildAgentContainerPort());
+        podTemplateProperties.put("buildContentId", environmentCreateRequest.getRepositoryBuildContentId());
+        podTemplateProperties.put("accessToken", rawWebToken);
 
         try {
-            environmentVariables.putAll(mdcToMap());
+            podTemplateProperties.putAll(mdcToMap());
         } catch (DriverException e) {
             return CompletableFuture.failedFuture(e);
         }
 
-        environmentVariables.put(
+        podTemplateProperties.put(
                 "resourcesMemory",
                 builderPodMemory(configuration.getBuilderPodMemory(), environmentCreateRequest.getPodMemoryOverride()));
 
         String buildAgentContextPath = getBuildAgentContextPath(environmentId);
-        environmentVariables.put("environment-label", environmentCreateRequest.getEnvironmentLabel());
-        environmentVariables.put("pod-name", podName);
-        environmentVariables.put("service-name", serviceName);
-        environmentVariables.put("buildAgentContextPath", buildAgentContextPath);
+        podTemplateProperties.put("environment-label", environmentCreateRequest.getEnvironmentLabel());
+        podTemplateProperties.put("pod-name", podName);
+        podTemplateProperties.put("service-name", serviceName);
+        podTemplateProperties.put("buildAgentContextPath", buildAgentContextPath);
 
         String sshPassword;
         if (environmentCreateRequest.isAllowSshDebug()) {
             sshPassword = RandomStringUtils.randomAlphanumeric(10);
-            environmentVariables.put("workerUserPassword", sshPassword);
+            podTemplateProperties.put("workerUserPassword", sshPassword);
         } else {
             sshPassword = "";
         }
 
         CompletableFuture<Pod> podRequested = CompletableFuture.supplyAsync(() -> {
-            Pod podCreationModel = createModelNode(configuration.getPodDefinition(), environmentVariables, Pod.class);
+            Pod podCreationModel = createModelNode(configuration.getPodDefinition(), podTemplateProperties, Pod.class);
             return openShiftClient.pods().create(podCreationModel);
         }, executor);
 
         CompletableFuture<Service> serviceRequested = CompletableFuture.supplyAsync(() -> {
             Service serviceCreationModel = createModelNode(
                     configuration.getServiceDefinition(),
-                    environmentVariables,
+                    podTemplateProperties,
                     Service.class);
             return openShiftClient.services().create(serviceCreationModel);
         }, executor);
@@ -234,21 +234,21 @@ public class Driver {
     }
 
     public CompletionStage<EnvironmentCompleteResponse> enableDebug(String environmentId) {
-        Map<String, String> serviceEnvVariables = new HashMap<>();
-        serviceEnvVariables.put("pod-name", getPodName(environmentId));
-        serviceEnvVariables.put("ssh-service-name", getSshServiceName(environmentId));
+        Map<String, String> serviceTemplateProperties = new HashMap<>();
+        serviceTemplateProperties.put("pod-name", getPodName(environmentId));
+        serviceTemplateProperties.put("ssh-service-name", getSshServiceName(environmentId));
 
-        Map<String, String> routeEnvVariables = new HashMap<>();
-        routeEnvVariables.put("route-name", getRouteName(environmentId));
-        routeEnvVariables.put("route-path", getBuildAgentContextPath(environmentId));
-        routeEnvVariables.put("service-name", getServiceName(environmentId));
-        routeEnvVariables.put("build-agent-host", configuration.getBuildAgentHost());
+        Map<String, String> routeTemplateProperties = new HashMap<>();
+        routeTemplateProperties.put("route-name", getRouteName(environmentId));
+        routeTemplateProperties.put("route-path", getBuildAgentContextPath(environmentId));
+        routeTemplateProperties.put("service-name", getServiceName(environmentId));
+        routeTemplateProperties.put("build-agent-host", configuration.getBuildAgentHost());
 
         // Enable ssh forwarding and complete with the port to which ssh is forwarded
         return CompletableFuture.supplyAsync(() -> {
             Service serviceCreationModel = createModelNode(
                     configuration.getSshServiceDefinition(),
-                    serviceEnvVariables,
+                    serviceTemplateProperties,
                     Service.class);
             Service sshService = openShiftClient.services().create(serviceCreationModel);
             return sshService.getSpec()
@@ -261,7 +261,7 @@ public class Driver {
         }, executor).thenApplyAsync(sshPort -> {
             Route routeCreationModel = createModelNode(
                     configuration.getRouteDefinition(),
-                    routeEnvVariables,
+                    routeTemplateProperties,
                     Route.class);
             Route route = openShiftClient.routes().create(routeCreationModel);
             String sshHost = route.getSpec().getHost();
