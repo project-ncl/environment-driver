@@ -34,6 +34,7 @@ import java.util.Optional;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
+import java.util.concurrent.TimeoutException;
 import java.util.function.Function;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -100,6 +101,14 @@ public class Driver {
      */
     private static final String[] POD_FAILED_STATUSES = { "Failed", "Unknown", "CrashLoopBackOff", "ErrImagePull",
             "ImagePullBackOff", "Error", "InvalidImageName", "ContainerCannotRun" };
+
+    private static final String ERROR_MESSAGE_INTRO = "\n\nSome errors occurred while trying to create a build environment where to run the build. ";
+    private static final String ERROR_MESSAGE_REGISTRY = "The builder pod failed to download the builder image "
+            + "(this could be due to issues with the builder images registry, or a misconfiguration of the builder image name).";
+    private static final String ERROR_MESSAGE_INITIALIZATION = "The builder pod failed to start "
+            + "(this could be due to misconfigured or bogus init scripts, or other unknown reasons).";
+    private static final String ERROR_MESSAGE_TIMEOUT = " As the maximum timeout has been reached, this could be due to an exhausted capacity of the underlying infrastructure "
+            + "(there is no space available to create the new build environment).";
 
     @Inject
     @UserLogger
@@ -522,6 +531,13 @@ public class Driver {
                                 String.format("%.2f", calculateAvailableResource("memory")),
                                 String.format("%.0f", calculateAvailableResource("cpu")),
                                 ctx.getLastFailure().getMessage()))
+                .onRetriesExceeded(ctx -> {
+                    String errMsg = ERROR_MESSAGE_INTRO + ERROR_MESSAGE_TIMEOUT
+                            + getPodRequestedVsAvailableResourcesInfo(podName);
+
+                    userLogger.warn(errMsg);
+                    throw new TimeoutException(errMsg);
+                })
                 .onFailure(
                         ctx -> userLogger.error("Unable to start pod {}: {}.", podName, ctx.getFailure().getMessage()))
                 .onAbort(
@@ -533,14 +549,22 @@ public class Driver {
             String podStatus = pod.getStatus().getPhase();
             logger.debug("Pod {} status: {}", pod.getMetadata().getName(), podStatus);
             if (Arrays.asList(POD_FAILED_STATUSES).contains(podStatus)) {
-                if (podStatus.toLowerCase().contains("image")) {
-                    userLogger.warn(
-                            "The builder pod failed to start because it was not able "
-                                    + "to download the builder image (this could be due to issues with the builder "
-                                    + "images registry, or a misconfiguration of the builder image name).");
+
+                String errMsg = ERROR_MESSAGE_INTRO;
+
+                if (Arrays.asList("ErrImagePull", "ImagePullBackOff", "InvalidImageName").contains(podStatus)) {
+                    errMsg += ERROR_MESSAGE_REGISTRY;
+                } else {
+                    errMsg += ERROR_MESSAGE_INITIALIZATION;
                 }
+
+                errMsg += getPodRequestedVsAvailableResourcesInfo(podName);
+
+                userLogger.warn(errMsg);
+
                 gaugeMetric.ifPresent(g -> g.incrementMetric(METRICS_POD_STARTED_FAILED_REASON_KEY + "." + podStatus));
-                throw new UnableToStartException("Pod failed with status: " + podStatus);
+
+                throw new UnableToStartException("Pod failed with status: " + podStatus + errMsg);
             }
             boolean isRunning = "Running".equals(pod.getStatus().getPhase());
             if (isRunning) {
@@ -804,6 +828,16 @@ public class Driver {
 
     private List<String> getItemNames(List<? extends HasMetadata> items) {
         return items.stream().map(s -> s.getMetadata().getName()).collect(Collectors.toList());
+    }
+
+    private String getPodRequestedVsAvailableResourcesInfo(String podName) {
+        return String.format(
+                "\nPod %s requested resources: %.2fGB %.1fcpu; Available resources: %.2fGB %.1fcpu",
+                podName,
+                calculateResourceUsedByPod(podName, "memory"),
+                calculateResourceUsedByPod(podName, "cpu"),
+                calculateAvailableResource("memory"),
+                calculateAvailableResource("cpu"));
     }
 
 }
