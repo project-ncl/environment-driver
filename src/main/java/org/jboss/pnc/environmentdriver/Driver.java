@@ -53,6 +53,7 @@ import io.fabric8.kubernetes.api.model.Quantity;
 import io.fabric8.kubernetes.api.model.Service;
 import io.fabric8.kubernetes.api.model.ServiceList;
 import io.fabric8.kubernetes.api.model.ServicePort;
+import io.fabric8.kubernetes.client.KubernetesClientException;
 import io.fabric8.openshift.api.model.Route;
 import io.fabric8.openshift.client.OpenShiftClient;
 import net.jodah.failsafe.Failsafe;
@@ -495,6 +496,35 @@ public class Driver {
         }
     }
 
+    private String getPodRequestedVsAvailableResourcesInfo(String podName) {
+
+        String msg = "\n";
+        try {
+            double memoryUsedByPod = calculateResourceUsedByPod(podName, "memory");
+            double cpuUsedByPod = calculateResourceUsedByPod(podName, "cpu");
+
+            msg += String
+                    .format("Pod %s requested resources: %.2fGB %.1fcpu; ", podName, memoryUsedByPod, cpuUsedByPod);
+        } catch (KubernetesClientException kEx) {
+            logger.error("Cannot calculate Pod {} requested resources", podName);
+        } catch (RuntimeException rEx) {
+            logger.error("Cannot convert Pod {} requested resources", podName);
+        }
+
+        try {
+            double availableMemory = calculateAvailableResource("memory");
+            double availableCpu = calculateAvailableResource("cpu");
+
+            msg += String.format("Available resources: %.2fGB %.1fcpu", availableMemory, availableCpu);
+        } catch (KubernetesClientException kEx) {
+            logger.error("Cannot calculate available resources in the namespace of Pod {}", podName);
+        } catch (RuntimeException rEx) {
+            logger.error("Cannot convert available resources in the namespace of Pod {}", podName);
+        }
+
+        return msg;
+    }
+
     private double calculateResourceUsedByPod(String podName, String resourceType) {
         return openShiftClient.top()
                 .pods()
@@ -533,42 +563,41 @@ public class Driver {
                         configuration.getPodRunningRetryMaxDelayMsec(),
                         ChronoUnit.MILLIS)
                 .abortOn(UnableToStartException.class)
-                .onSuccess(ctx -> userLogger.info("Pod is running: {}.", podName))
+                .onSuccess(ctx -> userLogger.info("Pod {} is running.", podName))
                 .onRetry(
+                        // Received the DriverException
                         ctx -> userLogger.warn(
-                                "Pod {} running retry attempt #{}; Last error: [{}].",
+                                "Running pod {} check #{}; Last error: [{}].",
                                 podName,
                                 ctx.getAttemptCount(),
-                                ctx.getLastFailure() != null ? ctx.getLastFailure().getMessage() : "")
-                )
+                                ctx.getLastFailure() != null ? ctx.getLastFailure().getMessage() : ""))
                 .onRetriesExceeded(ctx -> {
                     String errMsg = String.format(
-                            "Unable to start pod %s: %s",
+                            "Unable to start pod %s. %s",
                             podName,
                             (ctx.getFailure() != null ? ctx.getFailure().getMessage() : ""));
                     errMsg += ERROR_MESSAGE_INTRO + ERROR_MESSAGE_TIMEOUT
-                    // + getPodRequestedVsAvailableResourcesInfo(podName)
-                    ;
+                            + getPodRequestedVsAvailableResourcesInfo(podName);
 
                     userLogger.warn(errMsg);
                     throw new UnableToStartException(errMsg);
                 })
                 .onFailure(
                         ctx -> userLogger.error(
-                                "Unable to start pod {}: {}.",
+                                "Unable to start pod {}. {}",
                                 podName,
                                 (ctx.getFailure() != null ? ctx.getFailure().getMessage() : "")))
                 .onAbort(
-                        e -> userLogger.warn(
-                                "IsPodRunning aborted. Pod {}: {}.",
+                        // Received the UnableToStartException
+                        e -> logger.debug(
+                                "IsPodRunning for pod {} was aborted. {}",
                                 podName,
                                 (e.getFailure() != null ? e.getFailure().getMessage() : "")));
 
         return Failsafe.with(retryPolicy).with(executor).runAsync(() -> {
             Pod pod = openShiftClient.pods().withName(podName).get();
             String podStatus = pod.getStatus().getPhase();
-            String podMetadataName = pod.getMetadata().getName();
-            logger.debug("Pod {} status: {}", podMetadataName, podStatus);
+            logger.debug("Pod {} status: {}", podName, podStatus);
             if (Arrays.asList(POD_FAILED_STATUSES).contains(podStatus)) {
 
                 String errMsg = ERROR_MESSAGE_INTRO;
@@ -580,20 +609,14 @@ public class Driver {
                 }
                 // errMsg += getPodRequestedVsAvailableResourcesInfo(podName);
 
-                userLogger.warn(errMsg);
-
                 gaugeMetric.ifPresent(g -> g.incrementMetric(METRICS_POD_STARTED_FAILED_REASON_KEY + "." + podStatus));
 
                 throw new UnableToStartException("Pod failed with status: " + podStatus + errMsg);
-            } else {
-                logger.debug("Pod {} status not in the FAILED list", podMetadataName, podStatus);
             }
 
-            boolean isRunning = "Running".equals(pod.getStatus().getPhase());
-            if (isRunning) {
-                logger.debug("Pod running: {}.", podMetadataName);
-            } else {
-                throw new DriverException("Pod is not running.");
+            boolean isRunning = "Running".equals(podStatus);
+            if (!isRunning) {
+                throw new DriverException("Pod " + podName + " is not running.");
             }
         });
     }
@@ -622,7 +645,7 @@ public class Driver {
             if (clusterIP == null) {
                 throw new DriverException("Service " + serviceName + " is not running.");
             } else {
-                userLogger.info("Service up: {} ip: {}.", serviceName, clusterIP);
+                userLogger.info("Service {} is up with ip {}.", serviceName, clusterIP);
                 return URI.create(configuration.getBuildAgentServiceScheme() + "://" + clusterIP + ":" + clusterPort);
             }
         });
@@ -851,16 +874,6 @@ public class Driver {
 
     private List<String> getItemNames(List<? extends HasMetadata> items) {
         return items.stream().map(s -> s.getMetadata().getName()).collect(Collectors.toList());
-    }
-
-    private String getPodRequestedVsAvailableResourcesInfo(String podName) {
-        return String.format(
-                "\nPod %s requested resources: %.2fGB %.1fcpu; Available resources: %.2fGB %.1fcpu",
-                podName,
-                calculateResourceUsedByPod(podName, "memory"),
-                calculateResourceUsedByPod(podName, "cpu"),
-                calculateAvailableResource("memory"),
-                calculateAvailableResource("cpu"));
     }
 
 }
