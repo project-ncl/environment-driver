@@ -107,7 +107,7 @@ public class Driver {
             + "(this could be due to issues with the builder images registry, or a misconfiguration of the builder image name).";
     private static final String ERROR_MESSAGE_INITIALIZATION = "The builder pod failed to start "
             + "(this could be due to misconfigured or bogus init scripts, or other unknown reasons).";
-    private static final String ERROR_MESSAGE_TIMEOUT = " As the maximum timeout has been reached, this could be due to an exhausted capacity of the underlying infrastructure "
+    private static final String ERROR_MESSAGE_TIMEOUT = " The maximum timeout has been reached. This could be due to an exhausted capacity of the underlying infrastructure "
             + "(there is no space available to create the new build environment).";
 
     @Inject
@@ -546,17 +546,26 @@ public class Driver {
                                 String.format("%.0f", calculateAvailableResource("cpu")),
                                 ctx.getLastFailure().getMessage()))
                 .onRetriesExceeded(ctx -> {
-                    String errMsg = ERROR_MESSAGE_INTRO + ERROR_MESSAGE_TIMEOUT
+                    String errMsg = String.format(
+                            "Unable to start pod %s: %s",
+                            podName,
+                            (ctx.getFailure() != null ? ctx.getFailure().getMessage() : ""));
+                    errMsg += ERROR_MESSAGE_INTRO + ERROR_MESSAGE_TIMEOUT
                             + getPodRequestedVsAvailableResourcesInfo(podName);
 
                     userLogger.warn(errMsg);
-                    throw new TimeoutException(errMsg);
+                    throw new UnableToStartException(errMsg);
                 })
                 .onFailure(
-                        ctx -> userLogger.error("Unable to start pod {}: {}.", podName, ctx.getFailure().getMessage()))
+                        ctx -> userLogger.error(
+                                "Unable to start pod {}: {}.",
+                                podName,
+                                (ctx.getFailure() != null ? ctx.getFailure().getMessage() : "")))
                 .onAbort(
-                        e -> userLogger
-                                .warn("IsPodRunning aborted. Pod {}: {}.", podName, e.getFailure().getMessage()));
+                        e -> userLogger.warn(
+                                "IsPodRunning aborted. Pod {}: {}.",
+                                podName,
+                                (e.getFailure() != null ? e.getFailure().getMessage() : "")));
 
         return Failsafe.with(retryPolicy).with(executor).runAsync(() -> {
             Pod pod = openShiftClient.pods().withName(podName).get();
