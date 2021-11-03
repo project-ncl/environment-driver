@@ -536,22 +536,19 @@ public class Driver {
                 .onSuccess(ctx -> userLogger.info("Pod is running: {}.", podName))
                 .onRetry(
                         ctx -> userLogger.warn(
-                                "Pod {} running retry attempt #{}; Requested resources: {}GB {}cpu;"
-                                        + "Available resources: {}GB {}cpu; Last error: [{}].",
+                                "Pod {} running retry attempt #{}; Last error: [{}].",
                                 podName,
                                 ctx.getAttemptCount(),
-                                String.format("%.2f", calculateResourceUsedByPod(podName, "memory")),
-                                String.format("%.0f", calculateResourceUsedByPod(podName, "cpu")),
-                                String.format("%.2f", calculateAvailableResource("memory")),
-                                String.format("%.0f", calculateAvailableResource("cpu")),
-                                ctx.getLastFailure().getMessage()))
+                                ctx.getLastFailure() != null ? ctx.getLastFailure().getMessage() : "")
+                )
                 .onRetriesExceeded(ctx -> {
                     String errMsg = String.format(
                             "Unable to start pod %s: %s",
                             podName,
                             (ctx.getFailure() != null ? ctx.getFailure().getMessage() : ""));
                     errMsg += ERROR_MESSAGE_INTRO + ERROR_MESSAGE_TIMEOUT
-                            + getPodRequestedVsAvailableResourcesInfo(podName);
+                    // + getPodRequestedVsAvailableResourcesInfo(podName)
+                    ;
 
                     userLogger.warn(errMsg);
                     throw new UnableToStartException(errMsg);
@@ -570,7 +567,8 @@ public class Driver {
         return Failsafe.with(retryPolicy).with(executor).runAsync(() -> {
             Pod pod = openShiftClient.pods().withName(podName).get();
             String podStatus = pod.getStatus().getPhase();
-            logger.debug("Pod {} status: {}", pod.getMetadata().getName(), podStatus);
+            String podMetadataName = pod.getMetadata().getName();
+            logger.debug("Pod {} status: {}", podMetadataName, podStatus);
             if (Arrays.asList(POD_FAILED_STATUSES).contains(podStatus)) {
 
                 String errMsg = ERROR_MESSAGE_INTRO;
@@ -580,18 +578,20 @@ public class Driver {
                 } else {
                     errMsg += ERROR_MESSAGE_INITIALIZATION;
                 }
-
-                errMsg += getPodRequestedVsAvailableResourcesInfo(podName);
+                // errMsg += getPodRequestedVsAvailableResourcesInfo(podName);
 
                 userLogger.warn(errMsg);
 
                 gaugeMetric.ifPresent(g -> g.incrementMetric(METRICS_POD_STARTED_FAILED_REASON_KEY + "." + podStatus));
 
                 throw new UnableToStartException("Pod failed with status: " + podStatus + errMsg);
+            } else {
+                logger.debug("Pod {} status not in the FAILED list", podMetadataName, podStatus);
             }
+
             boolean isRunning = "Running".equals(pod.getStatus().getPhase());
             if (isRunning) {
-                logger.debug("Pod running: {}.", pod.getMetadata().getName());
+                logger.debug("Pod running: {}.", podMetadataName);
             } else {
                 throw new DriverException("Pod is not running.");
             }
