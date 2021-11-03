@@ -418,38 +418,52 @@ public class Driver {
         CompletableFuture<Void> podRunning = isPodRunning(podName);
         activeMonitors.add(podName, podRunning);
 
-        CompletableFuture.allOf(podRunning, serviceRunning).thenComposeAsync((nul) -> {
-            URI serviceBaseUri = serviceRunning.join(); // future already completed (allOff)
-            String serviceUriWithContext = serviceBaseUri + buildAgentContextPath;
-            CompletableFuture<HttpResponse<String>> pingFuture = pingBuildAgent(serviceUriWithContext);
-            activeMonitors.add(podName, pingFuture);
-            return pingFuture.thenApply((ignoreResponse) -> URI.create(serviceUriWithContext));
-        }).handleAsync((serviceUriWithContext, throwable) -> {
-            logger.debug("Completing monitor for pod: {}", podName);
-            activeMonitors.remove(podName);
-            CompletableFuture<HttpResponse<String>> callback;
-            if (throwable != null) {
-                if (throwable instanceof CancellationException) {
-                    callback = callback(completionCallback, EnvironmentCreateResult.cancelled());
-                } else {
-                    callback = callback(completionCallback, EnvironmentCreateResult.failed(throwable));
-                    gaugeMetric.ifPresent(g -> g.incrementMetric(METRICS_POD_STARTED_FAILED_KEY));
-                }
-            } else {
-                EnvironmentCreateResult environmentCreateResult = EnvironmentCreateResult
-                        .success(serviceUriWithContext, configuration.getWorkingDirectory(), sshPassword);
-                callback = callback(completionCallback, environmentCreateResult);
-                gaugeMetric.ifPresent(g -> g.incrementMetric(METRICS_POD_STARTED_SUCCESS_KEY));
-            }
-            callback.handle((r, t) -> {
-                if (t != null) {
-                    logger.error("Unable to send completion callback.", t);
-                }
-                lifecycle.removeActiveOperation();
-                return null;
-            });
+        // Do not wait for both podRunning and serviceRunning completion, one exception of them is enough to stop
+        // waiting for the other
+        CompletableFuture<Void> failure = new CompletableFuture<Void>();
+        podRunning.exceptionally(ex -> {
+            failure.completeExceptionally(ex);
             return null;
         });
+        serviceRunning.exceptionally(ex -> {
+            failure.completeExceptionally(ex);
+            return null;
+        });
+
+        CompletableFuture.anyOf(failure, CompletableFuture.allOf(podRunning, serviceRunning))
+                .thenComposeAsync((nul) -> {
+                    URI serviceBaseUri = serviceRunning.join(); // future already completed (allOff)
+                    String serviceUriWithContext = serviceBaseUri + buildAgentContextPath;
+                    CompletableFuture<HttpResponse<String>> pingFuture = pingBuildAgent(serviceUriWithContext);
+                    activeMonitors.add(podName, pingFuture);
+                    return pingFuture.thenApply((ignoreResponse) -> URI.create(serviceUriWithContext));
+                })
+                .handleAsync((serviceUriWithContext, throwable) -> {
+                    logger.debug("Completing monitor for pod: {}", podName);
+                    activeMonitors.remove(podName);
+                    CompletableFuture<HttpResponse<String>> callback;
+                    if (throwable != null) {
+                        if (throwable instanceof CancellationException) {
+                            callback = callback(completionCallback, EnvironmentCreateResult.cancelled());
+                        } else {
+                            callback = callback(completionCallback, EnvironmentCreateResult.failed(throwable));
+                            gaugeMetric.ifPresent(g -> g.incrementMetric(METRICS_POD_STARTED_FAILED_KEY));
+                        }
+                    } else {
+                        EnvironmentCreateResult environmentCreateResult = EnvironmentCreateResult
+                                .success(serviceUriWithContext, configuration.getWorkingDirectory(), sshPassword);
+                        callback = callback(completionCallback, environmentCreateResult);
+                        gaugeMetric.ifPresent(g -> g.incrementMetric(METRICS_POD_STARTED_SUCCESS_KEY));
+                    }
+                    callback.handle((r, t) -> {
+                        if (t != null) {
+                            logger.error("Unable to send completion callback.", t);
+                        }
+                        lifecycle.removeActiveOperation();
+                        return null;
+                    });
+                    return null;
+                });
     }
 
     /**
