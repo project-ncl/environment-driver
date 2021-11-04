@@ -28,9 +28,11 @@ import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
@@ -46,6 +48,8 @@ import javax.ws.rs.core.MediaType;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
+
+import io.fabric8.kubernetes.api.model.ContainerStatus;
 import io.fabric8.kubernetes.api.model.HasMetadata;
 import io.fabric8.kubernetes.api.model.Pod;
 import io.fabric8.kubernetes.api.model.PodList;
@@ -597,7 +601,23 @@ public class Driver {
         return Failsafe.with(retryPolicy).with(executor).runAsync(() -> {
             Pod pod = openShiftClient.pods().withName(podName).get();
             String podStatus = pod.getStatus().getPhase();
-            logger.debug("Pod {} status: {} message: {} reason: {} containesStatuses: {}", podName, podStatus, pod.getStatus().getMessage(), pod.getStatus().getReason(), pod.getStatus().getContainerStatuses().toArray());
+            // Get all the termination or waiting reasons for all the containers inside the Pod
+            Set<String> containerStatuses = new HashSet<String>();
+            if (pod.getStatus().getContainerStatuses() != null) {
+                for (ContainerStatus containerStatus : pod.getStatus().getContainerStatuses()) {
+                    if (containerStatus.getState() != null) {
+                        if (containerStatus.getState().getTerminated() != null) {
+                            containerStatuses.add(containerStatus.getState().getTerminated().getReason());
+                        }
+                        if (containerStatus.getState().getWaiting() != null) {
+                            containerStatuses.add(containerStatus.getState().getWaiting().getReason());
+                        }
+                    }
+                }
+            }
+            logger.debug("Pod {} status: {} containersStatusesReasons: {}", podName, podStatus, containerStatuses);
+            logger.debug(getPodRequestedVsAvailableResourcesInfo(podName));
+
             if (Arrays.asList(POD_FAILED_STATUSES).contains(podStatus)) {
 
                 String errMsg = ERROR_MESSAGE_INTRO;
@@ -607,7 +627,6 @@ public class Driver {
                 } else {
                     errMsg += ERROR_MESSAGE_INITIALIZATION;
                 }
-                // errMsg += getPodRequestedVsAvailableResourcesInfo(podName);
 
                 gaugeMetric.ifPresent(g -> g.incrementMetric(METRICS_POD_STARTED_FAILED_REASON_KEY + "." + podStatus));
 
