@@ -423,7 +423,8 @@ public class Driver {
         CompletableFuture<Void> podRunning = isPodRunning(podName);
         activeMonitors.add(podName, podRunning);
 
-        // Do not wait for both podRunning and serviceRunning completion, one exception of them is enough to stop
+        // Do not wait for both podRunning and serviceRunning completion, one exception
+        // of them is enough to stop
         // waiting for the other
         CompletableFuture<Void> failure = new CompletableFuture<Void>();
         podRunning.exceptionally(ex -> {
@@ -524,6 +525,8 @@ public class Driver {
             logger.error("Cannot calculate available resources in the namespace of Pod {}", podName);
         } catch (RuntimeException rEx) {
             logger.error("Cannot convert available resources in the namespace of Pod {}", podName);
+        } catch (Exception ex) {
+            logger.error("Error while getting available resources in the namespace of Pod {}", podName);
         }
 
         return msg;
@@ -545,7 +548,8 @@ public class Driver {
                 .list()
                 .getItems()
                 .stream()
-                .findFirst() // Only consider the first quota, we generally only use one!
+                .findFirst() // Only consider the first quota,
+                             // we generally only use one!
                 .map(
                         resourceQuota -> convertQuantity(resourceQuota.getStatus().getHard().get(identifier))
                                 - convertQuantity(resourceQuota.getStatus().getUsed().get(identifier)))
@@ -601,7 +605,8 @@ public class Driver {
         return Failsafe.with(retryPolicy).with(executor).runAsync(() -> {
             Pod pod = openShiftClient.pods().withName(podName).get();
             String podStatus = pod.getStatus().getPhase();
-            // Get all the termination or waiting reasons for all the containers inside the Pod
+            // Get all the termination or waiting reasons for all the containers inside the
+            // Pod
             Set<String> containerStatuses = new HashSet<String>();
             if (pod.getStatus().getContainerStatuses() != null) {
                 for (ContainerStatus containerStatus : pod.getStatus().getContainerStatuses()) {
@@ -616,7 +621,7 @@ public class Driver {
                 }
             }
             logger.debug("Pod {} status: {} containersStatusesReasons: {}", podName, podStatus, containerStatuses);
-            logger.debug(getPodRequestedVsAvailableResourcesInfo(podName));
+            //logger.debug(getPodRequestedVsAvailableResourcesInfo(podName));
 
             if (Arrays.asList(POD_FAILED_STATUSES).contains(podStatus)) {
 
