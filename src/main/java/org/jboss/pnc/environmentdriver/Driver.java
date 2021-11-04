@@ -605,8 +605,7 @@ public class Driver {
         return Failsafe.with(retryPolicy).with(executor).runAsync(() -> {
             Pod pod = openShiftClient.pods().withName(podName).get();
             String podStatus = pod.getStatus().getPhase();
-            // Get all the termination or waiting reasons for all the containers inside the
-            // Pod
+            // Get all the termination or waiting reasons for the containers inside the Pod
             Set<String> containerStatuses = new HashSet<String>();
             if (pod.getStatus().getContainerStatuses() != null) {
                 for (ContainerStatus containerStatus : pod.getStatus().getContainerStatuses()) {
@@ -621,13 +620,20 @@ public class Driver {
                 }
             }
             logger.debug("Pod {} status: {} containersStatusesReasons: {}", podName, podStatus, containerStatuses);
-            //logger.debug(getPodRequestedVsAvailableResourcesInfo(podName));
+            // logger.debug(getPodRequestedVsAvailableResourcesInfo(podName));
 
-            if (Arrays.asList(POD_FAILED_STATUSES).contains(podStatus)) {
+            // If the pod final status OR any status of all the containers in the pod are among the failed statuses,
+            // abort isPodRunning
+            if (Arrays.asList(POD_FAILED_STATUSES).contains(podStatus) || Arrays.asList(POD_FAILED_STATUSES)
+                    .stream()
+                    .anyMatch(failedStatus -> containerStatuses.contains(failedStatus))) {
 
                 String errMsg = ERROR_MESSAGE_INTRO;
 
-                if (Arrays.asList("ErrImagePull", "ImagePullBackOff", "InvalidImageName").contains(podStatus)) {
+                if (Arrays.asList("ErrImagePull", "ImagePullBackOff", "InvalidImageName").contains(podStatus)
+                        || Arrays.asList("ErrImagePull", "ImagePullBackOff", "InvalidImageName")
+                                .stream()
+                                .anyMatch(failedStatus -> containerStatuses.contains(failedStatus))) {
                     errMsg += ERROR_MESSAGE_REGISTRY;
                 } else {
                     errMsg += ERROR_MESSAGE_INITIALIZATION;
