@@ -597,7 +597,7 @@ public class Driver {
         return Failsafe.with(retryPolicy).with(executor).runAsync(() -> {
             Pod pod = openShiftClient.pods().withName(podName).get();
             String podStatus = pod.getStatus().getPhase();
-            logger.debug("Pod {} status: {}", podName, podStatus);
+            logger.debug("Pod {} status: {} message: {} reason: {} containesStatuses: {}", podName, podStatus, pod.getStatus().getMessage(), pod.getStatus().getReason(), pod.getStatus().getContainerStatuses().toArray());
             if (Arrays.asList(POD_FAILED_STATUSES).contains(podStatus)) {
 
                 String errMsg = ERROR_MESSAGE_INTRO;
