@@ -191,7 +191,23 @@ public class DriverTest {
                     .when()
                     .post("/create")
                     .then()
-                    .statusCode(500);
+                    .statusCode(200);
+
+            Request callback = callbackRequests.take();
+            logger.info("Request callback: {}", callback);
+
+            EnvironmentCreateResult creationCompleted = mapper
+                    .convertValue(callback.getAttachment(), EnvironmentCreateResult.class);
+            logger.info("Environment creation completed with status: {}", creationCompleted.getStatus());
+            Assertions.assertEquals(
+                    ResultStatus.FAILED,
+                    creationCompleted.getStatus(),
+                    "Unexpected environment creation status.");
+
+            Assertions.assertEquals(
+                    creationCompleted.getMessage(),
+                    Driver.ERROR_MESSAGE_INTRO + Driver.ERROR_MESSAGE_TEMPLATE_PARSE,
+                    "Unexpected environment creation message");
         } finally {
             System.setProperty("environment-driver.openshift.pod", originalPod);
         }
@@ -199,7 +215,8 @@ public class DriverTest {
 
     @Test
     @Timeout(15)
-    public void shouldCallbackWithFaileResultWhenBuildAgentPingFails() throws URISyntaxException, InterruptedException {
+    public void shouldCallbackWithFailedResultWhenBuildAgentPingFails()
+            throws URISyntaxException, InterruptedException {
         String originalService = ConfigProvider.getConfig()
                 .getValue("environment-driver.openshift.service", String.class);
         System.setProperty("environment-driver.openshift.service", originalService.replace("127.0.0.1", "127.1.2.3"));
