@@ -264,15 +264,17 @@ public class Driver {
             gaugeMetric.ifPresent(g -> g.incrementMetric(METRICS_POD_STARTED_FAILED_KEY));
 
             if (rootCause != null && rootCause instanceof MismatchedInputException) {
-
+                userLogger.error(ERROR_MESSAGE_INTRO + ERROR_MESSAGE_TEMPLATE_PARSE);
                 throw new BadResourcesRequestException(ERROR_MESSAGE_INTRO + ERROR_MESSAGE_TEMPLATE_PARSE, rootCause);
 
             } else if (rootCause != null && rootCause instanceof KubernetesClientException
                     && rootCause.getMessage().contains("exceeded quota")) {
 
+                userLogger.error(ERROR_MESSAGE_INTRO + ERROR_MESSAGE_EXCEEDED_QUOTA);
                 throw new QuotaExceededException(ERROR_MESSAGE_INTRO + ERROR_MESSAGE_EXCEEDED_QUOTA, rootCause);
 
             }
+            userLogger.error(rootCause != null ? rootCause.getMessage() : throwable.getMessage());
             throw new UnableToRequestResourcesException(
                     rootCause != null ? rootCause.getMessage() : throwable.getMessage());
         });
