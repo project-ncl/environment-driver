@@ -191,23 +191,7 @@ public class DriverTest {
                     .when()
                     .post("/create")
                     .then()
-                    .statusCode(200);
-
-            Request callback = callbackRequests.take();
-            logger.info("Request callback: {}", callback);
-
-            EnvironmentCreateResult creationCompleted = mapper
-                    .convertValue(callback.getAttachment(), EnvironmentCreateResult.class);
-            logger.info("Environment creation completed with status: {}", creationCompleted.getStatus());
-            Assertions.assertEquals(
-                    ResultStatus.FAILED,
-                    creationCompleted.getStatus(),
-                    "Unexpected environment creation status.");
-
-            Assertions.assertEquals(
-                    creationCompleted.getMessage(),
-                    Driver.ERROR_MESSAGE_INTRO + Driver.ERROR_MESSAGE_TEMPLATE_PARSE,
-                    "Unexpected environment creation message");
+                    .statusCode(400);
         } finally {
             System.setProperty("environment-driver.openshift.pod", originalPod);
         }

@@ -17,6 +17,10 @@
  */
 package org.jboss.pnc.environmentdriver;
 
+import static org.jboss.pnc.environmentdriver.Constants.METRICS_POD_STARTED_FAILED_KEY;
+import static org.jboss.pnc.environmentdriver.Constants.METRICS_POD_STARTED_FAILED_REASON_KEY;
+import static org.jboss.pnc.environmentdriver.Constants.METRICS_POD_STARTED_SUCCESS_KEY;
+
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.Socket;
@@ -36,14 +40,40 @@ import java.util.Set;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
-import java.util.concurrent.TimeoutException;
 import java.util.function.Function;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 import javax.enterprise.context.RequestScoped;
 import javax.inject.Inject;
+import javax.ws.rs.BadRequestException;
 import javax.ws.rs.core.MediaType;
+
+import org.apache.commons.lang3.RandomStringUtils;
+import org.apache.commons.text.StringSubstitutor;
+import org.eclipse.microprofile.context.ManagedExecutor;
+import org.eclipse.microprofile.jwt.JsonWebToken;
+import org.jboss.pnc.api.constants.HttpHeaders;
+import org.jboss.pnc.api.constants.MDCHeaderKeys;
+import org.jboss.pnc.api.dto.Request;
+import org.jboss.pnc.api.environmentdriver.dto.EnvironmentCompleteResponse;
+import org.jboss.pnc.api.environmentdriver.dto.EnvironmentCreateRequest;
+import org.jboss.pnc.api.environmentdriver.dto.EnvironmentCreateResponse;
+import org.jboss.pnc.api.environmentdriver.dto.EnvironmentCreateResult;
+import org.jboss.pnc.common.Random;
+import org.jboss.pnc.common.Strings;
+import org.jboss.pnc.environmentdriver.exceptions.BadResourcesRequestException;
+import org.jboss.pnc.environmentdriver.exceptions.DriverException;
+import org.jboss.pnc.environmentdriver.exceptions.FailedResponseException;
+import org.jboss.pnc.environmentdriver.exceptions.QuotaExceededException;
+import org.jboss.pnc.environmentdriver.exceptions.StoppingException;
+import org.jboss.pnc.environmentdriver.exceptions.UnableToRequestResourcesException;
+import org.jboss.pnc.environmentdriver.exceptions.UnableToStartException;
+import org.jboss.pnc.environmentdriver.runtime.ApplicationLifecycle;
+import org.jboss.pnc.pncmetrics.GaugeMetric;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -63,28 +93,6 @@ import io.fabric8.openshift.api.model.Route;
 import io.fabric8.openshift.client.OpenShiftClient;
 import net.jodah.failsafe.Failsafe;
 import net.jodah.failsafe.RetryPolicy;
-import org.apache.commons.lang3.RandomStringUtils;
-import org.apache.commons.text.StringSubstitutor;
-import org.eclipse.microprofile.context.ManagedExecutor;
-import org.eclipse.microprofile.jwt.JsonWebToken;
-import org.jboss.pnc.api.constants.HttpHeaders;
-import org.jboss.pnc.api.constants.MDCHeaderKeys;
-import org.jboss.pnc.api.dto.Request;
-import org.jboss.pnc.api.environmentdriver.dto.EnvironmentCompleteResponse;
-import org.jboss.pnc.api.environmentdriver.dto.EnvironmentCreateRequest;
-import org.jboss.pnc.api.environmentdriver.dto.EnvironmentCreateResponse;
-import org.jboss.pnc.api.environmentdriver.dto.EnvironmentCreateResult;
-import org.jboss.pnc.common.Random;
-import org.jboss.pnc.common.Strings;
-import org.jboss.pnc.environmentdriver.runtime.ApplicationLifecycle;
-import org.jboss.pnc.pncmetrics.GaugeMetric;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.slf4j.MDC;
-
-import static org.jboss.pnc.environmentdriver.Constants.METRICS_POD_STARTED_FAILED_KEY;
-import static org.jboss.pnc.environmentdriver.Constants.METRICS_POD_STARTED_FAILED_REASON_KEY;
-import static org.jboss.pnc.environmentdriver.Constants.METRICS_POD_STARTED_SUCCESS_KEY;
 
 /**
  * @author <a href="mailto:matejonnet@gmail.com">Matej Lazar</a>
@@ -253,32 +261,20 @@ public class Driver {
             Throwable rootCause = getRootCause(throwable);
             logger.error("Exception thrown with message: {}, rootCause: {}", throwable, rootCause);
 
-            CompletableFuture<HttpResponse<String>> callback;
-            if (rootCause != null && rootCause instanceof MismatchedInputException) {
-                callback = callback(
-                        environmentCreateRequest.getCompletionCallback(),
-                        EnvironmentCreateResult.failed(
-                                new UnableToStartException(ERROR_MESSAGE_INTRO + ERROR_MESSAGE_TEMPLATE_PARSE)));
-            } else if (rootCause != null && rootCause instanceof KubernetesClientException
-                    && rootCause.getMessage().contains("exceeded quota")) {
-                callback = callback(
-                        environmentCreateRequest.getCompletionCallback(),
-                        EnvironmentCreateResult.failed(
-                                new UnableToStartException(ERROR_MESSAGE_INTRO + ERROR_MESSAGE_EXCEEDED_QUOTA)));
-            } else {
-                callback = callback(
-                        environmentCreateRequest.getCompletionCallback(),
-                        EnvironmentCreateResult.failed(throwable));
-            }
             gaugeMetric.ifPresent(g -> g.incrementMetric(METRICS_POD_STARTED_FAILED_KEY));
 
-            callback.handle((r, t) -> {
-                if (t != null) {
-                    logger.error("Unable to send completion callback.", t);
-                }
-                return null;
-            });
-            return new EnvironmentCreateResponse(environmentId, getCancelRequest(environmentId, rawWebToken));
+            if (rootCause != null && rootCause instanceof MismatchedInputException) {
+
+                throw new BadResourcesRequestException(ERROR_MESSAGE_INTRO + ERROR_MESSAGE_TEMPLATE_PARSE, rootCause);
+
+            } else if (rootCause != null && rootCause instanceof KubernetesClientException
+                    && rootCause.getMessage().contains("exceeded quota")) {
+
+                throw new QuotaExceededException(ERROR_MESSAGE_INTRO + ERROR_MESSAGE_EXCEEDED_QUOTA, rootCause);
+
+            }
+            throw new UnableToRequestResourcesException(
+                    rootCause != null ? rootCause.getMessage() : throwable.getMessage());
         });
     }
 

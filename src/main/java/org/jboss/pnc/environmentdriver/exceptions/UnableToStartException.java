@@ -1,4 +1,4 @@
-package org.jboss.pnc.environmentdriver;
+package org.jboss.pnc.environmentdriver.exceptions;
 
 /**
  * @author <a href="mailto:matejonnet@gmail.com">Matej Lazar</a>
