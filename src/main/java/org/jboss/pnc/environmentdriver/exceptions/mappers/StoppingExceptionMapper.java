@@ -15,13 +15,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.jboss.pnc.environmentdriver.runtime;
+package org.jboss.pnc.environmentdriver.exceptions.mappers;
 
 import javax.ws.rs.core.Response;
 import javax.ws.rs.ext.ExceptionMapper;
 import javax.ws.rs.ext.Provider;
 
-import org.jboss.pnc.environmentdriver.StoppingException;
+import org.jboss.pnc.environmentdriver.exceptions.StoppingException;
 
 /**
  * @author Matej Lazar &lt;mlazar@redhat.com&gt;
