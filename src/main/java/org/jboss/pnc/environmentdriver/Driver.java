@@ -47,6 +47,7 @@ import javax.ws.rs.core.MediaType;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.exc.MismatchedInputException;
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 
 import io.fabric8.kubernetes.api.model.ContainerStatus;
@@ -107,13 +108,15 @@ public class Driver {
     private static final String[] POD_FAILED_STATUSES = { "Failed", "Unknown", "CrashLoopBackOff", "ErrImagePull",
             "ImagePullBackOff", "Error", "InvalidImageName", "ContainerCannotRun" };
 
-    private static final String ERROR_MESSAGE_INTRO = "\n\nSome errors occurred while trying to create a build environment where to run the build. ";
-    private static final String ERROR_MESSAGE_REGISTRY = "The builder pod failed to download the builder image "
+    public static final String ERROR_MESSAGE_INTRO = "\n\nSome errors occurred while trying to create a build environment where to run the build. ";
+    public static final String ERROR_MESSAGE_REGISTRY = "The builder pod failed to download the builder image "
             + "(this could be due to issues with the builder images registry, or a misconfiguration of the builder image name).";
-    private static final String ERROR_MESSAGE_INITIALIZATION = "The builder pod failed to start "
+    public static final String ERROR_MESSAGE_INITIALIZATION = "The builder pod failed to start "
             + "(this could be due to misconfigured or bogus init scripts, or other unknown reasons).";
-    private static final String ERROR_MESSAGE_TIMEOUT = " The maximum timeout has been reached. This could be due to an exhausted capacity of the underlying infrastructure "
+    public static final String ERROR_MESSAGE_TIMEOUT = " The maximum timeout has been reached. This could be due to an exhausted capacity of the underlying infrastructure "
             + "(there is no space available to create the new build environment).";
+    public static final String ERROR_MESSAGE_TEMPLATE_PARSE = " The builder pod failed to start because an error occured while parsing either the pod or the service template.";
+    public static final String ERROR_MESSAGE_EXCEEDED_QUOTA = " The builder pod failed to start because it exceeded the maximum quota available.";
 
     @Inject
     @UserLogger
@@ -223,9 +226,21 @@ public class Driver {
             return openShiftClient.services().create(serviceCreationModel);
         }, executor);
 
-        CompletableFuture<Void> podAndServiceRequested = CompletableFuture.allOf(podRequested, serviceRequested);
+        // Handle the exceptions thrown by requests (e.g. KubernetesClientException for exceeded quota)
+        CompletableFuture<Void> requestFailure = new CompletableFuture<Void>();
+        podRequested.exceptionally(ex -> {
+            requestFailure.completeExceptionally(ex);
+            return null;
+        });
+        serviceRequested.exceptionally(ex -> {
+            requestFailure.completeExceptionally(ex);
+            return null;
+        });
 
-        return podAndServiceRequested.thenApplyAsync((nul) -> {
+        // Do not wait for both podRequested and serviceRequested completion, one exception
+        // of them is enough to stop waiting for the other
+        CompletableFuture<Void> podAndServiceRequested = CompletableFuture.allOf(podRequested, serviceRequested);
+        return CompletableFuture.anyOf(requestFailure, podAndServiceRequested).thenApplyAsync((nul) -> {
             startMonitor(
                     serviceName,
                     buildAgentContextPath,
@@ -233,7 +248,38 @@ public class Driver {
                     environmentCreateRequest.getCompletionCallback(),
                     sshPassword);
             return new EnvironmentCreateResponse(environmentId, getCancelRequest(environmentId, rawWebToken));
-        }, executor);
+        }, executor).exceptionally(throwable -> {
+
+            Throwable rootCause = getRootCause(throwable);
+            logger.error("Exception thrown with message: {}, rootCause: {}", throwable, rootCause);
+
+            CompletableFuture<HttpResponse<String>> callback;
+            if (rootCause != null && rootCause instanceof MismatchedInputException) {
+                callback = callback(
+                        environmentCreateRequest.getCompletionCallback(),
+                        EnvironmentCreateResult.failed(
+                                new UnableToStartException(ERROR_MESSAGE_INTRO + ERROR_MESSAGE_TEMPLATE_PARSE)));
+            } else if (rootCause != null && rootCause instanceof KubernetesClientException
+                    && rootCause.getMessage().contains("exceeded quota")) {
+                callback = callback(
+                        environmentCreateRequest.getCompletionCallback(),
+                        EnvironmentCreateResult.failed(
+                                new UnableToStartException(ERROR_MESSAGE_INTRO + ERROR_MESSAGE_EXCEEDED_QUOTA)));
+            } else {
+                callback = callback(
+                        environmentCreateRequest.getCompletionCallback(),
+                        EnvironmentCreateResult.failed(throwable));
+            }
+            gaugeMetric.ifPresent(g -> g.incrementMetric(METRICS_POD_STARTED_FAILED_KEY));
+
+            callback.handle((r, t) -> {
+                if (t != null) {
+                    logger.error("Unable to send completion callback.", t);
+                }
+                return null;
+            });
+            return new EnvironmentCreateResponse(environmentId, getCancelRequest(environmentId, rawWebToken));
+        });
     }
 
     private Request getCancelRequest(String environmentId, String rawWebToken) {
@@ -904,6 +950,15 @@ public class Driver {
 
     private List<String> getItemNames(List<? extends HasMetadata> items) {
         return items.stream().map(s -> s.getMetadata().getName()).collect(Collectors.toList());
+    }
+
+    private static Throwable getRootCause(Throwable throwable) {
+        final List<Throwable> list = new ArrayList<>();
+        while (throwable != null && !list.contains(throwable)) {
+            list.add(throwable);
+            throwable = throwable.getCause();
+        }
+        return list.isEmpty() ? null : list.get(list.size() - 1);
     }
 
 }
