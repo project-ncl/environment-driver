@@ -116,7 +116,7 @@ public class Driver {
     private static final String[] POD_FAILED_STATUSES = { "Failed", "Unknown", "CrashLoopBackOff", "ErrImagePull",
             "ImagePullBackOff", "Error", "InvalidImageName", "ContainerCannotRun" };
 
-    public static final String ERROR_MESSAGE_INTRO = "\n\nSome errors occurred while trying to create a build environment where to run the build. ";
+    public static final String ERROR_MESSAGE_INTRO = "\n\nAn error occurred while trying to create a build environment where to run the build. ";
     public static final String ERROR_MESSAGE_REGISTRY = "The builder pod failed to download the builder image "
             + "(this could be due to issues with the builder images registry, or a misconfiguration of the builder image name).";
     public static final String ERROR_MESSAGE_INITIALIZATION = "The builder pod failed to start "
@@ -124,7 +124,7 @@ public class Driver {
     public static final String ERROR_MESSAGE_TIMEOUT = " The maximum timeout has been reached. This could be due to an exhausted capacity of the underlying infrastructure "
             + "(there is no space available to create the new build environment).";
     public static final String ERROR_MESSAGE_TEMPLATE_PARSE = " The builder pod failed to start because an error occured while parsing either the pod or the service template.";
-    public static final String ERROR_MESSAGE_EXCEEDED_QUOTA = " The builder pod failed to start because it exceeded the maximum quota available.";
+    public static final String ERROR_MESSAGE_EXCEEDED_QUOTA = " The maximum quota available for the build environments has been exceeded.";
 
     @Inject
     @UserLogger
