@@ -67,6 +67,7 @@ import org.jboss.pnc.environmentdriver.exceptions.DriverException;
 import org.jboss.pnc.environmentdriver.exceptions.FailedResponseException;
 import org.jboss.pnc.environmentdriver.exceptions.QuotaExceededException;
 import org.jboss.pnc.environmentdriver.exceptions.StoppingException;
+import org.jboss.pnc.environmentdriver.exceptions.TemporarilyUnableToStartException;
 import org.jboss.pnc.environmentdriver.exceptions.UnableToRequestResourcesException;
 import org.jboss.pnc.environmentdriver.exceptions.UnableToStartException;
 import org.jboss.pnc.environmentdriver.runtime.ApplicationLifecycle;
@@ -119,6 +120,8 @@ public class Driver {
     public static final String ERROR_MESSAGE_INTRO = "\n\nAn error occurred while trying to create a build environment where to run the build. ";
     public static final String ERROR_MESSAGE_REGISTRY = "The builder pod failed to download the builder image "
             + "(this could be due to issues with the builder images registry, or a misconfiguration of the builder image name).";
+    public static final String ERROR_MESSAGE_INVALID_IMAGE_NAME = "The builder pod failed to download the builder image "
+            + "(the builder image has an invalid name).";
     public static final String ERROR_MESSAGE_INITIALIZATION = "The builder pod failed to start "
             + "(this could be due to misconfigured or bogus init scripts, or other unknown reasons).";
     public static final String ERROR_MESSAGE_TIMEOUT = " The maximum timeout has been reached. This could be due to an exhausted capacity of the underlying infrastructure "
@@ -493,6 +496,9 @@ public class Driver {
                     activeMonitors.remove(podName);
                     CompletableFuture<HttpResponse<String>> callback;
                     if (throwable != null) {
+                        if (throwable instanceof TemporarilyUnableToStartException) {
+                            throw (TemporarilyUnableToStartException) throwable;
+                        }
                         if (throwable instanceof CancellationException) {
                             callback = callback(completionCallback, EnvironmentCreateResult.cancelled());
                         } else {
@@ -614,7 +620,7 @@ public class Driver {
                         configuration.getPodRunningRetryDelayMsec(),
                         configuration.getPodRunningRetryMaxDelayMsec(),
                         ChronoUnit.MILLIS)
-                .abortOn(UnableToStartException.class)
+                .abortOn(UnableToStartException.class, TemporarilyUnableToStartException.class)
                 .onSuccess(ctx -> userLogger.info("Pod {} is running.", podName))
                 .onRetry(
                         // Received the DriverException
@@ -672,20 +678,31 @@ public class Driver {
                     .stream()
                     .anyMatch(failedStatus -> containerStatuses.contains(failedStatus))) {
 
+                gaugeMetric.ifPresent(g -> g.incrementMetric(METRICS_POD_STARTED_FAILED_REASON_KEY + "." + podStatus));
+
                 String errMsg = ERROR_MESSAGE_INTRO;
 
-                if (Arrays.asList("ErrImagePull", "ImagePullBackOff", "InvalidImageName").contains(podStatus)
-                        || Arrays.asList("ErrImagePull", "ImagePullBackOff", "InvalidImageName")
+                if ("InvalidImageName".equals(podStatus) || containerStatuses.contains("InvalidImageName")) {
+
+                    // This failed status does not have to be retried
+                    errMsg += ERROR_MESSAGE_INVALID_IMAGE_NAME;
+
+                    throw new UnableToStartException("Pod failed with status: " + podStatus + errMsg);
+
+                } else if (Arrays.asList("ErrImagePull", "ImagePullBackOff").contains(podStatus)
+                        || Arrays.asList("ErrImagePull", "ImagePullBackOff")
                                 .stream()
                                 .anyMatch(failedStatus -> containerStatuses.contains(failedStatus))) {
+
+                    // This status might be due to a temporary issue with the registry, to be retried
                     errMsg += ERROR_MESSAGE_REGISTRY;
+
                 } else {
+                    // The remaining statuses might be due to temporary issues, to be retried
                     errMsg += ERROR_MESSAGE_INITIALIZATION;
                 }
 
-                gaugeMetric.ifPresent(g -> g.incrementMetric(METRICS_POD_STARTED_FAILED_REASON_KEY + "." + podStatus));
-
-                throw new UnableToStartException("Pod failed with status: " + podStatus + errMsg);
+                throw new TemporarilyUnableToStartException("Pod failed with status: " + podStatus + errMsg);
             }
 
             boolean isRunning = "Running".equals(podStatus);
