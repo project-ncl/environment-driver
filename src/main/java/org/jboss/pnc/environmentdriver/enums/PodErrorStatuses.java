@@ -1,14 +1,11 @@
 package org.jboss.pnc.environmentdriver.enums;
 
-import static org.jboss.pnc.environmentdriver.Driver.ERROR_MESSAGE_INTRO;
 import static org.jboss.pnc.environmentdriver.Driver.ERROR_MESSAGE_INITIALIZATION;
+import static org.jboss.pnc.environmentdriver.Driver.ERROR_MESSAGE_INTRO;
 import static org.jboss.pnc.environmentdriver.Driver.ERROR_MESSAGE_INVALID_IMAGE_NAME;
 import static org.jboss.pnc.environmentdriver.Driver.ERROR_MESSAGE_REGISTRY;
 
 import java.util.Arrays;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
