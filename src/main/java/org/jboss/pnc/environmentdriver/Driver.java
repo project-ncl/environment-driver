@@ -30,7 +30,6 @@ import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -46,7 +45,6 @@ import java.util.stream.Collectors;
 
 import javax.enterprise.context.RequestScoped;
 import javax.inject.Inject;
-import javax.ws.rs.BadRequestException;
 import javax.ws.rs.core.MediaType;
 
 import org.apache.commons.lang3.RandomStringUtils;
@@ -62,6 +60,7 @@ import org.jboss.pnc.api.environmentdriver.dto.EnvironmentCreateResponse;
 import org.jboss.pnc.api.environmentdriver.dto.EnvironmentCreateResult;
 import org.jboss.pnc.common.Random;
 import org.jboss.pnc.common.Strings;
+import org.jboss.pnc.environmentdriver.enums.PodErrorStatuses;
 import org.jboss.pnc.environmentdriver.exceptions.BadResourcesRequestException;
 import org.jboss.pnc.environmentdriver.exceptions.DriverException;
 import org.jboss.pnc.environmentdriver.exceptions.FailedResponseException;
@@ -102,20 +101,6 @@ import net.jodah.failsafe.RetryPolicy;
 public class Driver {
 
     private static final Logger logger = LoggerFactory.getLogger(Driver.class);
-
-    /**
-     * From: https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle/
-     *
-     * ErrImagePull and ImagePullBackOff added to that list. The pod.getStatus() call will return the *reason* of
-     * failure, and if the reason is not available, then it'll return the regular status (as mentioned in the link)
-     *
-     * For pod creation, the failure reason we expect when docker registry is not behaving is 'ErrImagePull' or
-     * 'ImagePullBackOff'
-     *
-     * 'Error' and 'InvalidImageName' statuses were added as per NCL-6032 investigations
-     */
-    private static final String[] POD_FAILED_STATUSES = { "Failed", "Unknown", "CrashLoopBackOff", "ErrImagePull",
-            "ImagePullBackOff", "Error", "InvalidImageName", "ContainerCannotRun" };
 
     public static final String ERROR_MESSAGE_INTRO = "\n\nAn error occurred while trying to create a build environment where to run the build. ";
     public static final String ERROR_MESSAGE_REGISTRY = "The builder pod failed to download the builder image "
@@ -670,39 +655,28 @@ public class Driver {
                 }
             }
             logger.debug("Pod {} status: {} containersStatusesReasons: {}", podName, podStatus, containerStatuses);
-            // logger.debug(getPodRequestedVsAvailableResourcesInfo(podName));
 
             // If the pod final status OR any status of all the containers in the pod are among the failed statuses,
             // abort isPodRunning
-            if (Arrays.asList(POD_FAILED_STATUSES).contains(podStatus) || Arrays.asList(POD_FAILED_STATUSES)
-                    .stream()
-                    .anyMatch(failedStatus -> containerStatuses.contains(failedStatus))) {
+            Optional<PodErrorStatuses> failedPodStatus = PodErrorStatuses.getIfPresent(podStatus);
+            Optional<PodErrorStatuses> failedContainerStatus = PodErrorStatuses.getIfPresent(containerStatuses);
 
-                gaugeMetric.ifPresent(g -> g.incrementMetric(METRICS_POD_STARTED_FAILED_REASON_KEY + "." + podStatus));
+            if (failedPodStatus.isPresent() || failedContainerStatus.isPresent()) {
+                // The status was among the failed statuses
+                PodErrorStatuses detectedPodErrorStatus = failedPodStatus.isPresent() ? failedPodStatus.get()
+                        : failedContainerStatus.get();
 
-                String errMsg = ERROR_MESSAGE_INTRO;
+                gaugeMetric.ifPresent(
+                        g -> g.incrementMetric(
+                                METRICS_POD_STARTED_FAILED_REASON_KEY + "." + detectedPodErrorStatus.getStatus()));
 
-                if ("InvalidImageName".equals(podStatus) || containerStatuses.contains("InvalidImageName")) {
-
-                    // This failed status does not have to be retried
-                    errMsg += ERROR_MESSAGE_INVALID_IMAGE_NAME;
-
-                    throw new UnableToStartException("Pod failed with status: " + podStatus + errMsg);
-
-                } else if (Arrays.asList("ErrImagePull", "ImagePullBackOff").contains(podStatus)
-                        || Arrays.asList("ErrImagePull", "ImagePullBackOff")
-                                .stream()
-                                .anyMatch(failedStatus -> containerStatuses.contains(failedStatus))) {
-
-                    // This status might be due to a temporary issue with the registry, to be retried
-                    errMsg += ERROR_MESSAGE_REGISTRY;
-
+                if (!detectedPodErrorStatus.isRetryable()) {
+                    throw new UnableToStartException(
+                            "Pod failed with status: " + podStatus + detectedPodErrorStatus.getCustomErrMsg());
                 } else {
-                    // The remaining statuses might be due to temporary issues, to be retried
-                    errMsg += ERROR_MESSAGE_INITIALIZATION;
+                    throw new TemporarilyUnableToStartException(
+                            "Pod failed with status: " + podStatus + detectedPodErrorStatus.getCustomErrMsg());
                 }
-
-                throw new TemporarilyUnableToStartException("Pod failed with status: " + podStatus + errMsg);
             }
 
             boolean isRunning = "Running".equals(podStatus);
