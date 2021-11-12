@@ -481,12 +481,20 @@ public class Driver {
                     activeMonitors.remove(podName);
                     CompletableFuture<HttpResponse<String>> callback;
                     if (throwable != null) {
-                        if (throwable instanceof CancellationException) {
+                        logger.debug("Received throwable: {}", throwable);
+                        if (throwable instanceof CancellationException
+                                || throwable.getCause() instanceof CancellationException) {
+
                             callback = callback(completionCallback, EnvironmentCreateResult.cancelled());
-                        } else if (throwable instanceof TemporarilyUnableToStartException) {
+
+                        } else if (throwable instanceof TemporarilyUnableToStartException
+                                || throwable.getCause() instanceof TemporarilyUnableToStartException) {
+
                             callback = callback(completionCallback, EnvironmentCreateResult.systemError(throwable));
                             gaugeMetric.ifPresent(g -> g.incrementMetric(METRICS_POD_STARTED_FAILED_KEY));
+
                         } else {
+
                             callback = callback(completionCallback, EnvironmentCreateResult.failed(throwable));
                             gaugeMetric.ifPresent(g -> g.incrementMetric(METRICS_POD_STARTED_FAILED_KEY));
                         }
