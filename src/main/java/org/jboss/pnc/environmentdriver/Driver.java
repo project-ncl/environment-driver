@@ -672,10 +672,12 @@ public class Driver {
 
                 if (!detectedPodErrorStatus.isRetryable()) {
                     throw new UnableToStartException(
-                            "Pod failed with status: " + podStatus + detectedPodErrorStatus.getCustomErrMsg());
+                            "Pod failed with status: " + detectedPodErrorStatus.getStatus()
+                                    + detectedPodErrorStatus.getCustomErrMsg());
                 } else {
                     throw new TemporarilyUnableToStartException(
-                            "Pod failed with status: " + podStatus + detectedPodErrorStatus.getCustomErrMsg());
+                            "Pod failed with status: " + detectedPodErrorStatus.getStatus()
+                                    + detectedPodErrorStatus.getCustomErrMsg());
                 }
             }
 
