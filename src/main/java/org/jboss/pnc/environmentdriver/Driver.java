@@ -650,6 +650,18 @@ public class Driver {
             String podStatus = pod.getStatus().getPhase();
             // Get all the termination or waiting reasons for the containers inside the Pod
             Set<String> containerStatuses = new HashSet<String>();
+            if (pod.getStatus().getInitContainerStatuses() != null) {
+                for (ContainerStatus containerStatus : pod.getStatus().getInitContainerStatuses()) {
+                    if (containerStatus.getState() != null) {
+                        if (containerStatus.getState().getTerminated() != null) {
+                            containerStatuses.add(containerStatus.getState().getTerminated().getReason());
+                        }
+                        if (containerStatus.getState().getWaiting() != null) {
+                            containerStatuses.add(containerStatus.getState().getWaiting().getReason());
+                        }
+                    }
+                }
+            }
             if (pod.getStatus().getContainerStatuses() != null) {
                 for (ContainerStatus containerStatus : pod.getStatus().getContainerStatuses()) {
                     if (containerStatus.getState() != null) {
