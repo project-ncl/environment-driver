@@ -253,6 +253,9 @@
         <artifactId>quarkus-maven-plugin</artifactId>
         <version>${quarkus-plugin.version}</version>
         <extensions>true</extensions>
+        <configuration>
+            <finalName>environment-driver</finalName>
+        </configuration>
         <executions>
           <execution>
             <goals>
@@ -350,9 +353,6 @@
           </plugin>
         </plugins>
       </build>
-      <properties>
-        <quarkus.package.type>uber-jar</quarkus.package.type>
-      </properties>
     </profile>
     <profile>
       <id>release</id>
