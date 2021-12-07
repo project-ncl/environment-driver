@@ -62,10 +62,9 @@
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
     <quarkus-logging-kafka.version>1.0.0</quarkus-logging-kafka.version>
-    <quarkus.platform.version>1.13.1.Final</quarkus.platform.version>
+    <quarkus.platform.version>2.5.1.Final</quarkus.platform.version>
     <quarkus.platform.artifact-id>quarkus-universe-bom</quarkus.platform.artifact-id>
     <quarkus.platform.group-id>io.quarkus</quarkus.platform.group-id>
-    <quarkus-plugin.version>1.13.1.Final</quarkus-plugin.version>
     <compiler-plugin.version>3.8.1</compiler-plugin.version>
     <surefire-plugin.version>3.0.0-M5</surefire-plugin.version>
     <quarkus.package.type>uber-jar</quarkus.package.type>
@@ -250,7 +249,7 @@
       <plugin>
         <groupId>io.quarkus</groupId>
         <artifactId>quarkus-maven-plugin</artifactId>
-        <version>${quarkus-plugin.version}</version>
+        <version>${quarkus.platform.version}</version>
         <extensions>true</extensions>
         <configuration>
             <finalName>environment-driver</finalName>
