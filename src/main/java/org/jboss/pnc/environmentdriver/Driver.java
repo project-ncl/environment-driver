@@ -618,7 +618,7 @@ public class Driver {
                 .onRetry(
                         // Received the DriverException
                         ctx -> userLogger.warn(
-                                "Running pod {} check #{}; Last error: [{}].",
+                                "Running pod {} check #{}; last checked status: [{}].",
                                 podName,
                                 ctx.getAttemptCount(),
                                 ctx.getLastFailure() != null ? ctx.getLastFailure().getMessage() : ""))
