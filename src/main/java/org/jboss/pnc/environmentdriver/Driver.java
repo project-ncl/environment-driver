@@ -247,7 +247,7 @@ public class Driver {
         }, executor).exceptionally(throwable -> {
 
             Throwable rootCause = getRootCause(throwable);
-            logger.error("Exception thrown with message: {}, rootCause: {}", throwable, rootCause);
+            logger.error("Exception thrown with message: {}", throwable, rootCause);
 
             gaugeMetric.ifPresent(g -> g.incrementMetric(METRICS_POD_STARTED_FAILED_KEY));
 
