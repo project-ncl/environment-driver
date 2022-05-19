@@ -161,4 +161,10 @@ public class Configuration {
     @ConfigProperty(name = "environment-driver.callback-retry-max-delay-msec", defaultValue = "5000")
     long callbackRetryMaxDelayMsec;
 
+    @ConfigProperty(name = "environment-driver.openshift-client.connect-timeout-msec", defaultValue = "10000")
+    int openshiftClientConnectTimeoutMsec;
+
+    @ConfigProperty(name = "environment-driver.openshift-client.request-timeout-msec", defaultValue = "10000")
+    int openshiftClientRequestTimeoutMsec;
+
 }

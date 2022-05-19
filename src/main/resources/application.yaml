@@ -66,6 +66,9 @@ environment-driver:
   service-running-retry-max-delay-msec: 5000
   callback-retry-delay-msec: 500
   callback-retry-max-delay-msec: 5000
+  openshift-client:
+    connect-timeout-msec: 30000
+    request-timeout-msec: 30000
   openshift:
     ssh-service-port-name: 2222-ssh
     pod: |

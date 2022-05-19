@@ -191,6 +191,9 @@ public class Driver {
             return CompletableFuture.failedFuture(e);
         }
 
+        openShiftClient.getConfiguration().setConnectionTimeout(configuration.getOpenshiftClientConnectTimeoutMsec());
+        openShiftClient.getConfiguration().setRequestTimeout(configuration.getOpenshiftClientRequestTimeoutMsec());
+
         podTemplateProperties.put(
                 "resourcesMemory",
                 builderPodMemory(configuration.getBuilderPodMemory(), environmentCreateRequest.getPodMemoryOverride()));
