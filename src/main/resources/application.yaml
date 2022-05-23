@@ -18,7 +18,9 @@ quarkus:
 #        async: true
 #        async-queue-length: 1024
 #        async-overflow-action: BLOCK
-#  kubernetes-client:
+  kubernetes-client:
+    connection-timeout: PT30S
+    request-timeout: PT30S
     #namespace: default
     #token: secretToken
   oidc:
