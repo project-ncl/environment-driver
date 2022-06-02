@@ -554,9 +554,9 @@ public class Driver {
             msg += String
                     .format("Pod %s requested resources: %.2fGB %.1fcpu; ", podName, memoryUsedByPod, cpuUsedByPod);
         } catch (KubernetesClientException kEx) {
-            logger.error("Cannot calculate Pod {} requested resources", podName);
+            logger.warn("Cannot calculate Pod {} requested resources", podName, kEx);
         } catch (RuntimeException rEx) {
-            logger.error("Cannot convert Pod {} requested resources", podName);
+            logger.warn("Cannot convert Pod {} requested resources", podName, rEx);
         }
 
         try {
@@ -565,11 +565,11 @@ public class Driver {
 
             msg += String.format("Available resources: %.2fGB %.1fcpu", availableMemory, availableCpu);
         } catch (KubernetesClientException kEx) {
-            logger.error("Cannot calculate available resources in the namespace of Pod {}", podName);
+            logger.warn("Cannot calculate available resources in the namespace of Pod {}", podName, kEx);
         } catch (RuntimeException rEx) {
-            logger.error("Cannot convert available resources in the namespace of Pod {}", podName);
+            logger.warn("Cannot convert available resources in the namespace of Pod {}", podName, rEx);
         } catch (Exception ex) {
-            logger.error("Error while getting available resources in the namespace of Pod {}", podName);
+            logger.warn("Error while getting available resources in the namespace of Pod {}", podName, ex);
         }
 
         return msg;
