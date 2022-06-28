@@ -191,6 +191,9 @@ environment-driver:
   quarkus:
     oidc:
       enabled: false
+    log:
+      console:
+        json: false
   environment-driver:
     http-client:
       connect-timeout: 1
@@ -280,4 +283,8 @@ environment-driver:
               targetPort: %{containerPort}
               nodePort: 0
           clusterIP: 127.0.0.1
-
+"%dev":
+  quarkus:
+    log:
+      console:
+        json: false
