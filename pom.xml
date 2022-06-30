@@ -61,7 +61,7 @@
     <maven.compiler.target>11</maven.compiler.target>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
-    <quarkus-logging-kafka.version>1.0.0</quarkus-logging-kafka.version>
+    <quarkus-logging-kafka.version>1.0.2</quarkus-logging-kafka.version>
     <quarkus.platform.version>2.5.1.Final</quarkus.platform.version>
     <quarkus.platform.artifact-id>quarkus-universe-bom</quarkus.platform.artifact-id>
     <quarkus.platform.group-id>io.quarkus</quarkus.platform.group-id>
