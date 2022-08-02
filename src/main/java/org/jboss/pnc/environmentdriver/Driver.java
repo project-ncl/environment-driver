@@ -519,9 +519,9 @@ public class Driver {
      * Tries to convert the Quantity value into the same units
      *
      * If the value unit is blank, return the value itself
-     * 
+     *
      * If the value unit is Gi / Mi, return the value in Gi unit
-     * 
+     *
      * If the value unit is m, return the original value / 1024
      *
      * @param quantity quantity to convert

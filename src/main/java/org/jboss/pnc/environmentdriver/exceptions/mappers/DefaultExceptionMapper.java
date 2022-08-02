@@ -35,7 +35,7 @@ import org.slf4j.LoggerFactory;
 /**
  * Mapper that catches all exception and extracts the http status code from the JAXRS/RESTEASY runtime exception. Status
  * code extraction is required for proper response error codes eg. 404.
- * 
+ *
  * @author Honza Brázdil &lt;jbrazdil@redhat.com&gt;
  * @author Matej Lazar &lt;mlazar@redhat.com&gt;
  */
