@@ -62,7 +62,7 @@
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
     <quarkus-logging-kafka.version>1.0.3</quarkus-logging-kafka.version>
-    <quarkus.platform.version>2.11.2.Final</quarkus.platform.version>
+    <quarkus.platform.version>2.12.0.Final</quarkus.platform.version>
     <quarkus.platform.artifact-id>quarkus-universe-bom</quarkus.platform.artifact-id>
     <quarkus.platform.group-id>io.quarkus</quarkus.platform.group-id>
     <compiler-plugin.version>3.10.1</compiler-plugin.version>
