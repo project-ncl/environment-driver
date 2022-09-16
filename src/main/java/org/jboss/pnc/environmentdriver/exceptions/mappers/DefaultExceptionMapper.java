@@ -54,14 +54,14 @@ public class DefaultExceptionMapper implements ExceptionMapper<Exception> {
             if (e instanceof NotFoundException) {
                 return response; // In case of 404 we want to return the empty body.
             }
-            logger.debug("A WebApplicationExceptio occurred when processing REST response", e);
+            logger.info("A WebApplicationExceptio occurred when processing REST response", e);
         } else if (e instanceof Failure) { // Resteasy support
             Failure failure = ((Failure) e);
             if (failure.getErrorCode() > 0) {
                 status = failure.getErrorCode();
             }
             response = failure.getResponse();
-            logger.debug("A Failure occurred when processing REST response", e);
+            logger.info("A Failure occurred when processing REST response", e);
         } else {
             logger.error("An exception occurred when processing REST response", e);
         }
