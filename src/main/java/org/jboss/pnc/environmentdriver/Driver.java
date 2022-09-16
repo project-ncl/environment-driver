@@ -477,11 +477,11 @@ public class Driver {
                     return pingFuture.thenApply((ignoreResponse) -> URI.create(serviceUriWithContext));
                 })
                 .handleAsync((serviceUriWithContext, throwable) -> {
-                    logger.debug("Completing monitor for pod: {}", podName);
+                    logger.info("Completing monitor for pod: {}", podName);
                     activeMonitors.remove(podName);
                     CompletableFuture<HttpResponse<String>> callback;
                     if (throwable != null) {
-                        logger.debug("Received throwable: {}", throwable);
+                        logger.info("Received throwable: {}", throwable);
                         if (throwable instanceof CancellationException
                                 || throwable.getCause() instanceof CancellationException) {
 
@@ -640,7 +640,7 @@ public class Driver {
                                 (ctx.getFailure() != null ? ctx.getFailure().getMessage() : "")))
                 .onAbort(
                         // Received the UnableToStartException
-                        e -> logger.debug(
+                        e -> logger.info(
                                 "IsPodRunning for pod {} was aborted. {}",
                                 podName,
                                 (e.getFailure() != null ? e.getFailure().getMessage() : "")));
@@ -674,7 +674,7 @@ public class Driver {
                     }
                 }
             }
-            logger.debug("Pod {} status: {} containersStatusesReasons: {}", podName, podStatus, containerStatuses);
+            logger.info("Pod {} status: {} containersStatusesReasons: {}", podName, podStatus, containerStatuses);
 
             // If the pod final status OR any status of all the containers in the pod are among the failed statuses,
             // abort isPodRunning
@@ -833,7 +833,7 @@ public class Driver {
                 })
                 .onFailure(ctx -> logger.error("Unable to send callback to: " + callback.getUri()))
                 .onAbort(e -> logger.warn("Callback aborted: {}.", e.getFailure().getMessage()));
-        logger.debug(
+        logger.info(
                 "About to callback: {} {}. With headers: {}.",
                 callback.getMethod(),
                 callback.getUri(),

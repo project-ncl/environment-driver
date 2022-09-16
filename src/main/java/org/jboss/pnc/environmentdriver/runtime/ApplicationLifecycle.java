@@ -52,12 +52,14 @@ public class ApplicationLifecycle {
     private boolean shuttingDown;
 
     void onStart(@Observes StartupEvent event) {
+        logger.info("Application is starting...");
         if (nodeId > -1) {
             Sequence.setNodeId(nodeIdOffset + nodeId);
         }
     }
 
     void onStop(@Observes ShutdownEvent event) {
+        logger.info("Application is shutting down...");
         shuttingDown = true;
         Duration shutdownTimeout = ConfigProvider.getConfig().getValue("quarkus.shutdown.timeout", Duration.class);
         Instant shutdownStarted = Instant.now();
