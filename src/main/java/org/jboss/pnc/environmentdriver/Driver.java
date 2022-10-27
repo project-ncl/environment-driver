@@ -950,8 +950,8 @@ public class Driver {
         putMdcToResultMap(result, mdcMap, MDCHeaderKeys.TMP, true);
         putMdcToResultMap(result, mdcMap, MDCHeaderKeys.EXP, true);
         putMdcToResultMap(result, mdcMap, MDCHeaderKeys.USER_ID, true);
-        putMdcToResultMap(result, mdcMap, MDCHeaderKeys.SLF4J_TRACE_ID, false);
-        putMdcToResultMap(result, mdcMap, MDCHeaderKeys.SLF4J_SPAN_ID, false);
+        putMdcToResultMap(result, mdcMap, MDCHeaderKeys.TRACE_ID, false);
+        putMdcToResultMap(result, mdcMap, MDCHeaderKeys.SPAN_ID, false);
         return result;
     }
 
