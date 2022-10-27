@@ -60,6 +60,7 @@ import org.jboss.pnc.api.environmentdriver.dto.EnvironmentCreateResponse;
 import org.jboss.pnc.api.environmentdriver.dto.EnvironmentCreateResult;
 import org.jboss.pnc.common.Random;
 import org.jboss.pnc.common.Strings;
+import org.jboss.pnc.common.log.MDCUtils;
 import org.jboss.pnc.environmentdriver.enums.PodErrorStatuses;
 import org.jboss.pnc.environmentdriver.exceptions.BadResourcesRequestException;
 import org.jboss.pnc.environmentdriver.exceptions.DriverException;
@@ -901,20 +902,11 @@ public class Driver {
         if (rawWebToken != null) {
             headers.add(new Request.Header(HttpHeaders.AUTHORIZATION_STRING, "Bearer " + rawWebToken));
         }
-        headersFromMdc(headers, MDCHeaderKeys.REQUEST_CONTEXT);
-        headersFromMdc(headers, MDCHeaderKeys.PROCESS_CONTEXT);
-        headersFromMdc(headers, MDCHeaderKeys.TMP);
-        headersFromMdc(headers, MDCHeaderKeys.EXP);
-        headersFromMdc(headers, MDCHeaderKeys.TRACE_ID);
-        headersFromMdc(headers, MDCHeaderKeys.SPAN_ID);
-        return headers;
-    }
 
-    private void headersFromMdc(List<Request.Header> headers, MDCHeaderKeys headerKey) {
-        String mdcValue = MDC.get(headerKey.getMdcKey());
-        if (!Strings.isEmpty(mdcValue)) {
-            headers.add(new Request.Header(headerKey.getHeaderName(), mdcValue));
-        }
+        MDCUtils.getHeadersFromMDC().forEach((headerName, headerValue) -> {
+            headers.add(new Request.Header(headerName, headerValue));
+        });
+        return headers;
     }
 
     private String builderPodMemory(int defaultBuilderPodMemory, String builderPodMemoryOverride) {
