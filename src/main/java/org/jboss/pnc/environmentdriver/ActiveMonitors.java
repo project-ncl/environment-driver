@@ -1,6 +1,5 @@
 package org.jboss.pnc.environmentdriver;
 
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
@@ -8,8 +7,6 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 
 import javax.enterprise.context.ApplicationScoped;
-
-import io.vertx.core.impl.ConcurrentHashSet;
 
 /**
  * Keep a set of active monitors per key (pod name)

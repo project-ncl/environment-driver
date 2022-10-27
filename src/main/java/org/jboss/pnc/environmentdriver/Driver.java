@@ -91,6 +91,9 @@ import io.fabric8.kubernetes.api.model.ServicePort;
 import io.fabric8.kubernetes.client.KubernetesClientException;
 import io.fabric8.openshift.api.model.Route;
 import io.fabric8.openshift.client.OpenShiftClient;
+import io.opentelemetry.context.Context;
+import io.opentelemetry.instrumentation.annotations.SpanAttribute;
+import io.opentelemetry.instrumentation.annotations.WithSpan;
 import net.jodah.failsafe.Failsafe;
 import net.jodah.failsafe.RetryPolicy;
 
@@ -154,7 +157,9 @@ public class Driver {
      *
      * @return CompletionStage which is completed when all required requests to the Openshift complete.
      */
-    public CompletionStage<EnvironmentCreateResponse> create(EnvironmentCreateRequest environmentCreateRequest) {
+    @WithSpan()
+    public CompletionStage<EnvironmentCreateResponse> create(
+            @SpanAttribute(value = "environmentCreateRequest") EnvironmentCreateRequest environmentCreateRequest) {
         if (lifecycle.isShuttingDown()) {
             throw new StoppingException();
         }
@@ -209,63 +214,68 @@ public class Driver {
             sshPassword = "";
         }
 
-        CompletableFuture<Pod> podRequested = CompletableFuture.supplyAsync(() -> {
+        CompletableFuture<Pod> podRequested = CompletableFuture.supplyAsync(Context.current().wrapSupplier(() -> {
             Pod podCreationModel = createModelNode(configuration.getPodDefinition(), podTemplateProperties, Pod.class);
             return openShiftClient.pods().create(podCreationModel);
-        }, executor);
+        }), executor);
 
-        CompletableFuture<Service> serviceRequested = CompletableFuture.supplyAsync(() -> {
-            Service serviceCreationModel = createModelNode(
-                    configuration.getServiceDefinition(),
-                    podTemplateProperties,
-                    Service.class);
-            return openShiftClient.services().create(serviceCreationModel);
-        }, executor);
+        CompletableFuture<Service> serviceRequested = CompletableFuture
+                .supplyAsync(Context.current().wrapSupplier(() -> {
+                    Service serviceCreationModel = createModelNode(
+                            configuration.getServiceDefinition(),
+                            podTemplateProperties,
+                            Service.class);
+                    return openShiftClient.services().create(serviceCreationModel);
+                }), executor);
 
         // Handle the exceptions thrown by requests (e.g. KubernetesClientException for exceeded quota)
         CompletableFuture<Void> requestFailure = new CompletableFuture<Void>();
-        podRequested.exceptionally(ex -> {
+        podRequested.exceptionally(Context.current().wrapFunction(ex -> {
             requestFailure.completeExceptionally(ex);
             return null;
-        });
-        serviceRequested.exceptionally(ex -> {
+        }));
+        serviceRequested.exceptionally(Context.current().wrapFunction(ex -> {
             requestFailure.completeExceptionally(ex);
             return null;
-        });
+        }));
 
         // Do not wait for both podRequested and serviceRequested completion, one exception
         // of them is enough to stop waiting for the other
         CompletableFuture<Void> podAndServiceRequested = CompletableFuture.allOf(podRequested, serviceRequested);
-        return CompletableFuture.anyOf(requestFailure, podAndServiceRequested).thenApplyAsync((nul) -> {
-            startMonitor(
-                    serviceName,
-                    buildAgentContextPath,
-                    podName,
-                    environmentCreateRequest.getCompletionCallback(),
-                    sshPassword);
-            return new EnvironmentCreateResponse(environmentId, getCancelRequest(environmentId, rawWebToken));
-        }, executor).exceptionally(throwable -> {
+        return CompletableFuture.anyOf(requestFailure, podAndServiceRequested)
+                .thenApplyAsync(Context.current().wrapFunction((nul) -> {
+                    startMonitor(
+                            serviceName,
+                            buildAgentContextPath,
+                            podName,
+                            environmentCreateRequest.getCompletionCallback(),
+                            sshPassword);
+                    return new EnvironmentCreateResponse(environmentId, getCancelRequest(environmentId, rawWebToken));
+                }), executor)
+                .exceptionally(throwable -> {
 
-            Throwable rootCause = getRootCause(throwable);
-            logger.error("Exception thrown with message: {}", throwable, rootCause);
+                    Throwable rootCause = getRootCause(throwable);
+                    logger.error("Exception thrown with message: {}", throwable, rootCause);
 
-            gaugeMetric.ifPresent(g -> g.incrementMetric(METRICS_POD_STARTED_FAILED_KEY));
+                    gaugeMetric.ifPresent(g -> g.incrementMetric(METRICS_POD_STARTED_FAILED_KEY));
 
-            if (rootCause != null && rootCause instanceof MismatchedInputException) {
-                userLogger.error(ERROR_MESSAGE_INTRO + ERROR_MESSAGE_TEMPLATE_PARSE);
-                throw new BadResourcesRequestException(ERROR_MESSAGE_INTRO + ERROR_MESSAGE_TEMPLATE_PARSE, rootCause);
+                    if (rootCause != null && rootCause instanceof MismatchedInputException) {
+                        userLogger.error(ERROR_MESSAGE_INTRO + ERROR_MESSAGE_TEMPLATE_PARSE);
+                        throw new BadResourcesRequestException(
+                                ERROR_MESSAGE_INTRO + ERROR_MESSAGE_TEMPLATE_PARSE,
+                                rootCause);
 
-            } else if (rootCause != null && rootCause instanceof KubernetesClientException
-                    && rootCause.getMessage().contains("exceeded quota")) {
+                    } else if (rootCause != null && rootCause instanceof KubernetesClientException
+                            && rootCause.getMessage().contains("exceeded quota")) {
 
-                userLogger.error(ERROR_MESSAGE_INTRO + ERROR_MESSAGE_EXCEEDED_QUOTA);
-                throw new QuotaExceededException(ERROR_MESSAGE_INTRO + ERROR_MESSAGE_EXCEEDED_QUOTA, rootCause);
+                        userLogger.error(ERROR_MESSAGE_INTRO + ERROR_MESSAGE_EXCEEDED_QUOTA);
+                        throw new QuotaExceededException(ERROR_MESSAGE_INTRO + ERROR_MESSAGE_EXCEEDED_QUOTA, rootCause);
 
-            }
-            userLogger.error(rootCause != null ? rootCause.getMessage() : throwable.getMessage());
-            throw new UnableToRequestResourcesException(
-                    rootCause != null ? rootCause.getMessage() : throwable.getMessage());
-        });
+                    }
+                    userLogger.error(rootCause != null ? rootCause.getMessage() : throwable.getMessage());
+                    throw new UnableToRequestResourcesException(
+                            rootCause != null ? rootCause.getMessage() : throwable.getMessage());
+                });
     }
 
     private Request getCancelRequest(String environmentId, String rawWebToken) {
@@ -279,7 +289,9 @@ public class Driver {
                 .build();
     }
 
-    public CompletionStage<EnvironmentCompleteResponse> enableDebug(String environmentId) {
+    @WithSpan()
+    public CompletionStage<EnvironmentCompleteResponse> enableDebug(
+            @SpanAttribute(value = "environmentId") String environmentId) {
         Map<String, String> serviceTemplateProperties = new HashMap<>();
         serviceTemplateProperties.put("pod-name", getPodName(environmentId));
         serviceTemplateProperties.put("ssh-service-name", getSshServiceName(environmentId));
@@ -291,7 +303,7 @@ public class Driver {
         routeTemplateProperties.put("build-agent-host", configuration.getBuildAgentHost());
 
         // Enable ssh forwarding and complete with the port to which ssh is forwarded
-        return CompletableFuture.supplyAsync(() -> {
+        return CompletableFuture.supplyAsync(Context.current().wrapSupplier(() -> {
             Service serviceCreationModel = createModelNode(
                     configuration.getSshServiceDefinition(),
                     serviceTemplateProperties,
@@ -304,7 +316,7 @@ public class Driver {
                     .findAny()
                     .orElseThrow(() -> new RuntimeException("No ssh service in response! Service data: " + sshService))
                     .getNodePort();
-        }, executor).thenApplyAsync(sshPort -> {
+        }), executor).thenApplyAsync(Context.current().wrapFunction(sshPort -> {
             Route routeCreationModel = createModelNode(
                     configuration.getRouteDefinition(),
                     routeTemplateProperties,
@@ -312,10 +324,14 @@ public class Driver {
             Route route = openShiftClient.routes().create(routeCreationModel);
             String sshHost = route.getSpec().getHost();
             return new InetSocketAddress(sshHost, sshPort);
-        }, executor)
-                .thenComposeAsync(this::pingSsh)
+        }), executor)
+                .thenComposeAsync(Context.current().wrapFunction(this::pingSsh))
                 .thenApplyAsync(
-                        socketAddr -> new EnvironmentCompleteResponse(socketAddr.getHostName(), socketAddr.getPort()));
+                        Context.current()
+                                .wrapFunction(
+                                        socketAddr -> new EnvironmentCompleteResponse(
+                                                socketAddr.getHostName(),
+                                                socketAddr.getPort())));
     }
 
     private CompletableFuture<InetSocketAddress> pingSsh(InetSocketAddress inetSocketAddress) {
@@ -353,7 +369,8 @@ public class Driver {
     /**
      * Method will try its best to destroy the environment. Fire and forget operation.
      */
-    public void destroy(String environmentId) {
+    @WithSpan()
+    public void destroy(@SpanAttribute(value = "environmentId") String environmentId) {
         String podName = getPodName(environmentId);
         String serviceName = getServiceName(environmentId);
         activeMonitors.cancel(podName);
@@ -411,7 +428,8 @@ public class Driver {
      * Method will try its best to destroy all the environments created from given environmentName. Fire and forget
      * operation.
      */
-    public void destroyAll(String environmentLabel) {
+    @WithSpan()
+    public void destroyAll(@SpanAttribute(value = "environmentLabel") String environmentLabel) {
         // delete service
         RetryPolicy<String> servicesRetryPolicy = getDestroyRetryPolicy("services-of-" + environmentLabel);
         Failsafe.with(servicesRetryPolicy).with(executor).runAsync(() -> {
@@ -459,24 +477,24 @@ public class Driver {
         // of them is enough to stop
         // waiting for the other
         CompletableFuture<Void> failure = new CompletableFuture<Void>();
-        podRunning.exceptionally(ex -> {
+        podRunning.exceptionally(Context.current().wrapFunction(ex -> {
             failure.completeExceptionally(ex);
             return null;
-        });
-        serviceRunning.exceptionally(ex -> {
+        }));
+        serviceRunning.exceptionally(Context.current().wrapFunction(ex -> {
             failure.completeExceptionally(ex);
             return null;
-        });
+        }));
 
         CompletableFuture.anyOf(failure, CompletableFuture.allOf(podRunning, serviceRunning))
-                .thenComposeAsync((nul) -> {
+                .thenComposeAsync(Context.current().wrapFunction((nul) -> {
                     URI serviceBaseUri = serviceRunning.join(); // future already completed (allOff)
                     String serviceUriWithContext = serviceBaseUri + buildAgentContextPath;
                     CompletableFuture<HttpResponse<String>> pingFuture = pingBuildAgent(serviceUriWithContext);
                     activeMonitors.add(podName, pingFuture);
                     return pingFuture.thenApply((ignoreResponse) -> URI.create(serviceUriWithContext));
-                })
-                .handleAsync((serviceUriWithContext, throwable) -> {
+                }))
+                .handleAsync(Context.current().wrapFunction((serviceUriWithContext, throwable) -> {
                     logger.info("Completing monitor for pod: {}", podName);
                     activeMonitors.remove(podName);
                     CompletableFuture<HttpResponse<String>> callback;
@@ -512,7 +530,7 @@ public class Driver {
                         return null;
                     });
                     return null;
-                });
+                }));
     }
 
     /**
@@ -887,6 +905,8 @@ public class Driver {
         headersFromMdc(headers, MDCHeaderKeys.PROCESS_CONTEXT);
         headersFromMdc(headers, MDCHeaderKeys.TMP);
         headersFromMdc(headers, MDCHeaderKeys.EXP);
+        headersFromMdc(headers, MDCHeaderKeys.TRACE_ID);
+        headersFromMdc(headers, MDCHeaderKeys.SPAN_ID);
         return headers;
     }
 
@@ -942,6 +962,8 @@ public class Driver {
         putMdcToResultMap(result, mdcMap, MDCHeaderKeys.TMP);
         putMdcToResultMap(result, mdcMap, MDCHeaderKeys.EXP);
         putMdcToResultMap(result, mdcMap, MDCHeaderKeys.USER_ID);
+        putMdcToResultMap(result, mdcMap, MDCHeaderKeys.TRACE_ID);
+        putMdcToResultMap(result, mdcMap, MDCHeaderKeys.SPAN_ID);
         return result;
     }
 
