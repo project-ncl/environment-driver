@@ -875,15 +875,20 @@ public class Driver {
         return "pnc-ba-ssh-" + environmentId;
     }
 
-    private void putMdcToResultMap(Map<String, String> result, Map<String, String> mdcMap, MDCHeaderKeys mdcHeaderKeys)
-            throws DriverException {
+    private void putMdcToResultMap(
+            Map<String, String> result,
+            Map<String, String> mdcMap,
+            MDCHeaderKeys mdcHeaderKeys,
+            boolean strict) throws DriverException {
         if (mdcMap == null) {
             throw new DriverException("Missing MDC map.");
         }
         if (mdcMap.get(mdcHeaderKeys.getMdcKey()) != null) {
             result.put(mdcHeaderKeys.getMdcKey(), mdcMap.get(mdcHeaderKeys.getMdcKey()));
         } else {
-            throw new DriverException("Missing MDC value " + mdcHeaderKeys.getMdcKey());
+            if (strict) {
+                throw new DriverException("Missing MDC value " + mdcHeaderKeys.getMdcKey());
+            }
         }
     }
 
@@ -941,12 +946,12 @@ public class Driver {
     private Map<String, String> mdcToMap() throws DriverException {
         Map<String, String> result = new HashMap<>();
         Map<String, String> mdcMap = MDC.getCopyOfContextMap();
-        putMdcToResultMap(result, mdcMap, MDCHeaderKeys.PROCESS_CONTEXT);
-        putMdcToResultMap(result, mdcMap, MDCHeaderKeys.TMP);
-        putMdcToResultMap(result, mdcMap, MDCHeaderKeys.EXP);
-        putMdcToResultMap(result, mdcMap, MDCHeaderKeys.USER_ID);
-        putMdcToResultMap(result, mdcMap, MDCHeaderKeys.TRACE_ID);
-        putMdcToResultMap(result, mdcMap, MDCHeaderKeys.SPAN_ID);
+        putMdcToResultMap(result, mdcMap, MDCHeaderKeys.PROCESS_CONTEXT, true);
+        putMdcToResultMap(result, mdcMap, MDCHeaderKeys.TMP, true);
+        putMdcToResultMap(result, mdcMap, MDCHeaderKeys.EXP, true);
+        putMdcToResultMap(result, mdcMap, MDCHeaderKeys.USER_ID, true);
+        putMdcToResultMap(result, mdcMap, MDCHeaderKeys.SLF4J_TRACE_ID, false);
+        putMdcToResultMap(result, mdcMap, MDCHeaderKeys.SLF4J_SPAN_ID, false);
         return result;
     }
 
