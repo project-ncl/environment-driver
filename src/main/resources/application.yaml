@@ -6,7 +6,7 @@ quarkus:
       "org.jboss.pnc":
         level: DEBUG
     console:
-      format: "%d{HH:mm:ss,SSS} %-5p [%c{3.}] (%t) %s%e mdc:[%X]%n"
+      format: "%d{HH:mm:ss,SSS} %-5p traceId=%X{traceId}, parentId=%X{parentId}, spanId=%X{spanId}, sampled=%X{sampled} [%c{3.}] (%t) %s%e mdc:[%X]%n"
     handler:
       kafka:
         enabled: false
@@ -35,6 +35,19 @@ quarkus:
       keycloak:
         policy-enforcer:
           enable: false
+
+  opentelemetry:
+    enabled: true
+    tracer:
+      enabled: true
+      # reflect sampling on collector
+      resource-attributes: "sampler_ratio=0.05,service.name=environment-driver"
+      sampler:
+        ratio: 0.05
+      exporter:
+        otlp:
+          # Send telemetry data to an opentelemetry-collector
+          #endpoint: http://localhost:4317
 environment-driver:
   build-agent:
     service-scheme: http
@@ -259,7 +272,7 @@ environment-driver:
                 - name: buildAgentArguments
                   value: "-b 0.0.0.0 -p %{containerPort} -pl FILE -l /tmp -c %{buildAgentContextPath}"
                 - name: buildAgentJvmProperties
-                  value: "-DlogMDC=processContext:%{processContext};tmp:%{tmp};exp:%{exp}"
+                  value: "-DlogMDC=processContext:%{processContext};tmp:%{tmp};exp:%{exp};traceId:%{traceId};spanId:%{spanId}"
               resources:
               terminationMessagePath: "/dev/termination-log"
               imagePullPolicy: Always
