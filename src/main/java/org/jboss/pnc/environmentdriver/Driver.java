@@ -952,7 +952,27 @@ public class Driver {
         putMdcToResultMap(result, mdcMap, MDCHeaderKeys.USER_ID, true);
         putMdcToResultMap(result, mdcMap, MDCHeaderKeys.TRACE_ID, false);
         putMdcToResultMap(result, mdcMap, MDCHeaderKeys.SPAN_ID, false);
+        putMdcToResultMap(result, mdcMap, MDCHeaderKeys.TRACE_SAMPLED, false);
+        // Fix the OTEL mapping
+        translateOtelSampledPropertyValue(result);
         return result;
+    }
+
+    // Quarkus is putting sampled = true|false in the MDC context; in order to create a traceparent HTTP header
+    // (https://www.w3.org/TR/trace-context-1/#traceparent-header) we need to map boolean values to the known values 00
+    // and 01
+    private void translateOtelSampledPropertyValue(Map<String, String> result) {
+        if (result != null) {
+            // https://www.w3.org/TR/trace-context-1/#trace-flags
+            String rawValue = result.get(MDCHeaderKeys.TRACE_SAMPLED.getMdcKey());
+            if (rawValue != null) {
+                if (Boolean.valueOf(rawValue)) {
+                    result.put(MDCHeaderKeys.TRACE_SAMPLED.getMdcKey(), "01");
+                } else {
+                    result.put(MDCHeaderKeys.TRACE_SAMPLED.getMdcKey(), "00");
+                }
+            }
+        }
     }
 
     private boolean isHttpSuccess(int responseCode) {
