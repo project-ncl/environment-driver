@@ -29,7 +29,10 @@ import javax.ws.rs.core.Request;
 import javax.ws.rs.core.UriInfo;
 import javax.ws.rs.ext.Provider;
 
+import io.opentelemetry.api.trace.Span;
 import io.quarkus.security.identity.SecurityIdentity;
+
+import org.jboss.pnc.api.constants.MDCHeaderKeys;
 import org.jboss.pnc.api.constants.MDCKeys;
 import org.jboss.pnc.common.log.MDCUtils;
 import org.slf4j.Logger;
@@ -53,6 +56,13 @@ public class LoggingFilter implements ContainerRequestFilter, ContainerResponseF
 
         requestContext.setProperty(REQUEST_EXECUTION_START, System.currentTimeMillis());
         MDCUtils.setMDCFromRequestContext(requestContext);
+        MDCUtils.addMDCFromOtelHeadersWithFallback(
+                requestContext,
+                MDCHeaderKeys.TRACE_ID,
+                MDCHeaderKeys.SPAN_ID,
+                MDCHeaderKeys.TRACE_FLAGS,
+                MDCHeaderKeys.TRACE_STATE,
+                Span.current().getSpanContext());
 
         UriInfo uriInfo = requestContext.getUriInfo();
         Request request = requestContext.getRequest();
