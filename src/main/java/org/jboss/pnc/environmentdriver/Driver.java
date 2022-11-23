@@ -30,6 +30,7 @@ import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -53,7 +54,9 @@ import org.eclipse.microprofile.context.ManagedExecutor;
 import org.eclipse.microprofile.jwt.JsonWebToken;
 import org.jboss.pnc.api.constants.HttpHeaders;
 import org.jboss.pnc.api.constants.MDCHeaderKeys;
+import org.jboss.pnc.api.constants.MDCKeys;
 import org.jboss.pnc.api.dto.Request;
+import org.jboss.pnc.api.dto.Request.Header;
 import org.jboss.pnc.api.environmentdriver.dto.EnvironmentCompleteResponse;
 import org.jboss.pnc.api.environmentdriver.dto.EnvironmentCreateRequest;
 import org.jboss.pnc.api.environmentdriver.dto.EnvironmentCreateResponse;
@@ -61,6 +64,7 @@ import org.jboss.pnc.api.environmentdriver.dto.EnvironmentCreateResult;
 import org.jboss.pnc.common.Random;
 import org.jboss.pnc.common.Strings;
 import org.jboss.pnc.common.log.MDCUtils;
+import org.jboss.pnc.common.otel.OtelUtils;
 import org.jboss.pnc.environmentdriver.enums.PodErrorStatuses;
 import org.jboss.pnc.environmentdriver.exceptions.BadResourcesRequestException;
 import org.jboss.pnc.environmentdriver.exceptions.DriverException;
@@ -80,6 +84,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.exc.MismatchedInputException;
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
+import com.redhat.resilience.otel.internal.OTelContextUtil;
 
 import io.fabric8.kubernetes.api.model.ContainerStatus;
 import io.fabric8.kubernetes.api.model.HasMetadata;
@@ -92,6 +97,13 @@ import io.fabric8.kubernetes.api.model.ServicePort;
 import io.fabric8.kubernetes.client.KubernetesClientException;
 import io.fabric8.openshift.api.model.Route;
 import io.fabric8.openshift.client.OpenShiftClient;
+import io.opentelemetry.api.GlobalOpenTelemetry;
+import io.opentelemetry.api.trace.Span;
+import io.opentelemetry.api.trace.SpanBuilder;
+import io.opentelemetry.api.trace.SpanContext;
+import io.opentelemetry.api.trace.SpanKind;
+import io.opentelemetry.api.trace.Tracer;
+import io.opentelemetry.context.Scope;
 import io.opentelemetry.instrumentation.annotations.SpanAttribute;
 import io.opentelemetry.instrumentation.annotations.WithSpan;
 import net.jodah.failsafe.Failsafe;
@@ -803,6 +815,19 @@ public class Driver {
             logger.error("Cannot serialize callback object.", e);
             body = "";
         }
+
+        // To have a link with the distributed trace, I need to manually create a new child span from the initial span
+        // available in the callback headers (sent by RHPAM)
+        SpanBuilder spanBuilder = createSpanBuilderFromCallbackHeaders(
+                GlobalOpenTelemetry.get().getTracer(""),
+                "Driver.callback",
+                SpanKind.CLIENT,
+                callback.getHeaders(),
+                Span.current().getSpanContext(),
+                Collections.emptyMap());
+        Span span = spanBuilder.startSpan();
+        logger.debug("Started a new span :{}", span);
+
         HttpRequest.Builder builder = HttpRequest.newBuilder()
                 .uri(callback.getUri())
                 .method(callback.getMethod().name(), HttpRequest.BodyPublishers.ofString(body))
@@ -848,11 +873,71 @@ public class Driver {
                 callback.getMethod(),
                 callback.getUri(),
                 callback.getHeaders());
-        return Failsafe.with(retryPolicy)
-                .with(executor)
-                .getStageAsync(
-                        () -> httpClient.sendAsync(request, HttpResponse.BodyHandlers.ofString())
-                                .thenApply(validateResponse()));
+
+        // put the span into the current Context
+        try (Scope scope = span.makeCurrent()) {
+            return Failsafe.with(retryPolicy)
+                    .with(executor)
+                    .getStageAsync(
+                            () -> httpClient.sendAsync(request, HttpResponse.BodyHandlers.ofString())
+                                    .thenApply(validateResponse()));
+        } finally {
+            span.end(); // closing the scope does not end the span, this has to be done manually
+        }
+    }
+
+    private SpanBuilder createSpanBuilderFromCallbackHeaders(
+            Tracer tracer,
+            String spanName,
+            SpanKind spanKind,
+            List<Header> callbackHeaders,
+            SpanContext fallback,
+            Map<String, String> attributes) {
+
+        String remoteTrace = null;
+        String remoteSpan = null;
+        String remoteTraceFlags = null;
+        String remoteTraceState = null;
+
+        Header remoteTraceparentHeader = callbackHeaders.stream()
+                .filter(h -> h.getName().equalsIgnoreCase(MDCHeaderKeys.TRACEPARENT.getHeaderName()))
+                .findFirst()
+                .orElse(null);
+
+        if (remoteTraceparentHeader != null) {
+            SpanContext remoteSpanContext = OTelContextUtil
+                    .extractContextFromTraceParent(remoteTraceparentHeader.getValue());
+            remoteTrace = remoteSpanContext.getTraceId();
+            remoteSpan = remoteSpanContext.getSpanId();
+            remoteTraceFlags = remoteSpanContext.getTraceFlags().asHex();
+        } else {
+            Header remoteTraceHeader = callbackHeaders.stream()
+                    .filter(h -> h.getName().equalsIgnoreCase(MDCHeaderKeys.TRACE_ID.getHeaderName()))
+                    .findFirst()
+                    .orElse(null);
+            Header remoteSpanHeader = callbackHeaders.stream()
+                    .filter(h -> h.getName().equalsIgnoreCase(MDCHeaderKeys.SPAN_ID.getHeaderName()))
+                    .findFirst()
+                    .orElse(null);
+            if (remoteTraceHeader != null && remoteSpanHeader != null) {
+                remoteTrace = remoteTraceHeader.getValue();
+                remoteSpan = remoteSpanHeader.getValue();
+            }
+        }
+
+        // Create a parent child span with values from MDC
+        SpanBuilder spanBuilder = OtelUtils.buildChildSpan(
+                tracer,
+                spanName,
+                spanKind,
+                remoteTrace,
+                remoteSpan,
+                remoteTraceFlags,
+                remoteTraceState,
+                fallback,
+                attributes);
+        return spanBuilder;
+
     }
 
     private String getPodName(String environmentId) {
@@ -875,20 +960,38 @@ public class Driver {
         return "pnc-ba-ssh-" + environmentId;
     }
 
-    private void putMdcToResultMap(
-            Map<String, String> result,
-            Map<String, String> mdcMap,
-            MDCHeaderKeys mdcHeaderKeys,
-            boolean strict) throws DriverException {
+    private void putMdcToResultMap(Map<String, String> result, Map<String, String> mdcMap, MDCHeaderKeys mdcHeaderKeys)
+            throws DriverException {
         if (mdcMap == null) {
             throw new DriverException("Missing MDC map.");
         }
         if (mdcMap.get(mdcHeaderKeys.getMdcKey()) != null) {
             result.put(mdcHeaderKeys.getMdcKey(), mdcMap.get(mdcHeaderKeys.getMdcKey()));
         } else {
-            if (strict) {
-                throw new DriverException("Missing MDC value " + mdcHeaderKeys.getMdcKey());
-            }
+            throw new DriverException("Missing MDC value " + mdcHeaderKeys.getMdcKey());
+        }
+    }
+
+    private void putOtelMdcToResultMap(Map<String, String> result, Map<String, String> mdcMap) throws DriverException {
+        if (mdcMap == null) {
+            throw new DriverException("Missing MDC map.");
+        }
+
+        String trace = mdcMap.get(MDCKeys.TRACE_ID_KEY);
+        String span = mdcMap.get(MDCKeys.SPAN_ID_KEY);
+        String traceFlags = mdcMap.get(MDCKeys.TRACE_FLAGS_KEY);
+
+        if (!Strings.isEmpty(trace)) {
+            result.put(MDCKeys.TRACE_ID_KEY, trace);
+        }
+        if (!Strings.isEmpty(span)) {
+            result.put(MDCKeys.SPAN_ID_KEY, span);
+        }
+
+        Map<String, String> traceparentHeader = OtelUtils.createTraceParentHeader(trace, span, traceFlags);
+        String traceparent = traceparentHeader.get(MDCHeaderKeys.TRACEPARENT.getHeaderName());
+        if (!Strings.isEmpty(traceparent)) {
+            result.put(MDCHeaderKeys.TRACEPARENT.getMdcKey(), traceparent);
         }
     }
 
@@ -946,33 +1049,13 @@ public class Driver {
     private Map<String, String> mdcToMap() throws DriverException {
         Map<String, String> result = new HashMap<>();
         Map<String, String> mdcMap = MDC.getCopyOfContextMap();
-        putMdcToResultMap(result, mdcMap, MDCHeaderKeys.PROCESS_CONTEXT, true);
-        putMdcToResultMap(result, mdcMap, MDCHeaderKeys.TMP, true);
-        putMdcToResultMap(result, mdcMap, MDCHeaderKeys.EXP, true);
-        putMdcToResultMap(result, mdcMap, MDCHeaderKeys.USER_ID, true);
-        putMdcToResultMap(result, mdcMap, MDCHeaderKeys.TRACE_ID, false);
-        putMdcToResultMap(result, mdcMap, MDCHeaderKeys.SPAN_ID, false);
-        putMdcToResultMap(result, mdcMap, MDCHeaderKeys.TRACE_SAMPLED, false);
-        // Fix the OTEL mapping
-        translateOtelSampledPropertyValue(result);
-        return result;
-    }
+        putMdcToResultMap(result, mdcMap, MDCHeaderKeys.PROCESS_CONTEXT);
+        putMdcToResultMap(result, mdcMap, MDCHeaderKeys.TMP);
+        putMdcToResultMap(result, mdcMap, MDCHeaderKeys.EXP);
+        putMdcToResultMap(result, mdcMap, MDCHeaderKeys.USER_ID);
 
-    // Quarkus is putting sampled = true|false in the MDC context; in order to create a traceparent HTTP header
-    // (https://www.w3.org/TR/trace-context-1/#traceparent-header) we need to map boolean values to the known values 00
-    // and 01
-    private void translateOtelSampledPropertyValue(Map<String, String> result) {
-        if (result != null) {
-            // https://www.w3.org/TR/trace-context-1/#trace-flags
-            String rawValue = result.get(MDCHeaderKeys.TRACE_SAMPLED.getMdcKey());
-            if (rawValue != null) {
-                if (Boolean.valueOf(rawValue)) {
-                    result.put(MDCHeaderKeys.TRACE_SAMPLED.getMdcKey(), "01");
-                } else {
-                    result.put(MDCHeaderKeys.TRACE_SAMPLED.getMdcKey(), "00");
-                }
-            }
-        }
+        putOtelMdcToResultMap(result, mdcMap);
+        return result;
     }
 
     private boolean isHttpSuccess(int responseCode) {
