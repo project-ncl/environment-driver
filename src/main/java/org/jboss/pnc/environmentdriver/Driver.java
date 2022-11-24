@@ -816,17 +816,18 @@ public class Driver {
             body = "";
         }
 
-        // To have a link with the distributed trace, I need to manually create a new child span from the initial span
-        // available in the callback headers (sent by RHPAM)
-        SpanBuilder spanBuilder = createSpanBuilderFromCallbackHeaders(
-                GlobalOpenTelemetry.get().getTracer(""),
-                "Driver.callback",
-                SpanKind.CLIENT,
-                callback.getHeaders(),
-                Span.current().getSpanContext(),
-                Collections.emptyMap());
-        Span span = spanBuilder.startSpan();
-        logger.debug("Started a new span :{}", span);
+        // // To have a link with the distributed trace, I need to manually create a new child span from the initial
+        // span
+        // // available in the callback headers (sent by RHPAM)
+        // SpanBuilder spanBuilder = createSpanBuilderFromCallbackHeaders(
+        // GlobalOpenTelemetry.get().getTracer(""),
+        // "Driver.callback",
+        // SpanKind.CLIENT,
+        // callback.getHeaders(),
+        // Span.current().getSpanContext(),
+        // Collections.emptyMap());
+        // Span span = spanBuilder.startSpan();
+        // logger.debug("Started a new span :{}", span);
 
         HttpRequest.Builder builder = HttpRequest.newBuilder()
                 .uri(callback.getUri())
@@ -875,15 +876,15 @@ public class Driver {
                 callback.getHeaders());
 
         // put the span into the current Context
-        try (Scope scope = span.makeCurrent()) {
-            return Failsafe.with(retryPolicy)
-                    .with(executor)
-                    .getStageAsync(
-                            () -> httpClient.sendAsync(request, HttpResponse.BodyHandlers.ofString())
-                                    .thenApply(validateResponse()));
-        } finally {
-            span.end(); // closing the scope does not end the span, this has to be done manually
-        }
+        // try (Scope scope = span.makeCurrent()) {
+        return Failsafe.with(retryPolicy)
+                .with(executor)
+                .getStageAsync(
+                        () -> httpClient.sendAsync(request, HttpResponse.BodyHandlers.ofString())
+                                .thenApply(validateResponse()));
+        // } finally {
+        // span.end(); // closing the scope does not end the span, this has to be done manually
+        // }
     }
 
     private SpanBuilder createSpanBuilderFromCallbackHeaders(
