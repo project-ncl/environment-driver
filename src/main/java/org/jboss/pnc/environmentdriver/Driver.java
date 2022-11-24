@@ -30,7 +30,6 @@ import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -56,7 +55,6 @@ import org.jboss.pnc.api.constants.HttpHeaders;
 import org.jboss.pnc.api.constants.MDCHeaderKeys;
 import org.jboss.pnc.api.constants.MDCKeys;
 import org.jboss.pnc.api.dto.Request;
-import org.jboss.pnc.api.dto.Request.Header;
 import org.jboss.pnc.api.environmentdriver.dto.EnvironmentCompleteResponse;
 import org.jboss.pnc.api.environmentdriver.dto.EnvironmentCreateRequest;
 import org.jboss.pnc.api.environmentdriver.dto.EnvironmentCreateResponse;
@@ -84,7 +82,6 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.exc.MismatchedInputException;
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
-import com.redhat.resilience.otel.internal.OTelContextUtil;
 
 import io.fabric8.kubernetes.api.model.ContainerStatus;
 import io.fabric8.kubernetes.api.model.HasMetadata;
@@ -97,13 +94,6 @@ import io.fabric8.kubernetes.api.model.ServicePort;
 import io.fabric8.kubernetes.client.KubernetesClientException;
 import io.fabric8.openshift.api.model.Route;
 import io.fabric8.openshift.client.OpenShiftClient;
-import io.opentelemetry.api.GlobalOpenTelemetry;
-import io.opentelemetry.api.trace.Span;
-import io.opentelemetry.api.trace.SpanBuilder;
-import io.opentelemetry.api.trace.SpanContext;
-import io.opentelemetry.api.trace.SpanKind;
-import io.opentelemetry.api.trace.Tracer;
-import io.opentelemetry.context.Scope;
 import io.opentelemetry.instrumentation.annotations.SpanAttribute;
 import io.opentelemetry.instrumentation.annotations.WithSpan;
 import net.jodah.failsafe.Failsafe;
@@ -816,19 +806,6 @@ public class Driver {
             body = "";
         }
 
-        // // To have a link with the distributed trace, I need to manually create a new child span from the initial
-        // span
-        // // available in the callback headers (sent by RHPAM)
-        // SpanBuilder spanBuilder = createSpanBuilderFromCallbackHeaders(
-        // GlobalOpenTelemetry.get().getTracer(""),
-        // "Driver.callback",
-        // SpanKind.CLIENT,
-        // callback.getHeaders(),
-        // Span.current().getSpanContext(),
-        // Collections.emptyMap());
-        // Span span = spanBuilder.startSpan();
-        // logger.debug("Started a new span :{}", span);
-
         HttpRequest.Builder builder = HttpRequest.newBuilder()
                 .uri(callback.getUri())
                 .method(callback.getMethod().name(), HttpRequest.BodyPublishers.ofString(body))
@@ -875,70 +852,11 @@ public class Driver {
                 callback.getUri(),
                 callback.getHeaders());
 
-        // put the span into the current Context
-        // try (Scope scope = span.makeCurrent()) {
         return Failsafe.with(retryPolicy)
                 .with(executor)
                 .getStageAsync(
                         () -> httpClient.sendAsync(request, HttpResponse.BodyHandlers.ofString())
                                 .thenApply(validateResponse()));
-        // } finally {
-        // span.end(); // closing the scope does not end the span, this has to be done manually
-        // }
-    }
-
-    private SpanBuilder createSpanBuilderFromCallbackHeaders(
-            Tracer tracer,
-            String spanName,
-            SpanKind spanKind,
-            List<Header> callbackHeaders,
-            SpanContext fallback,
-            Map<String, String> attributes) {
-
-        String remoteTrace = null;
-        String remoteSpan = null;
-        String remoteTraceFlags = null;
-        String remoteTraceState = null;
-
-        Header remoteTraceparentHeader = callbackHeaders.stream()
-                .filter(h -> h.getName().equalsIgnoreCase(MDCHeaderKeys.TRACEPARENT.getHeaderName()))
-                .findFirst()
-                .orElse(null);
-
-        if (remoteTraceparentHeader != null) {
-            SpanContext remoteSpanContext = OTelContextUtil
-                    .extractContextFromTraceParent(remoteTraceparentHeader.getValue());
-            remoteTrace = remoteSpanContext.getTraceId();
-            remoteSpan = remoteSpanContext.getSpanId();
-            remoteTraceFlags = remoteSpanContext.getTraceFlags().asHex();
-        } else {
-            Header remoteTraceHeader = callbackHeaders.stream()
-                    .filter(h -> h.getName().equalsIgnoreCase(MDCHeaderKeys.TRACE_ID.getHeaderName()))
-                    .findFirst()
-                    .orElse(null);
-            Header remoteSpanHeader = callbackHeaders.stream()
-                    .filter(h -> h.getName().equalsIgnoreCase(MDCHeaderKeys.SPAN_ID.getHeaderName()))
-                    .findFirst()
-                    .orElse(null);
-            if (remoteTraceHeader != null && remoteSpanHeader != null) {
-                remoteTrace = remoteTraceHeader.getValue();
-                remoteSpan = remoteSpanHeader.getValue();
-            }
-        }
-
-        // Create a parent child span with values from MDC
-        SpanBuilder spanBuilder = OtelUtils.buildChildSpan(
-                tracer,
-                spanName,
-                spanKind,
-                remoteTrace,
-                remoteSpan,
-                remoteTraceFlags,
-                remoteTraceState,
-                fallback,
-                attributes);
-        return spanBuilder;
-
     }
 
     private String getPodName(String environmentId) {
