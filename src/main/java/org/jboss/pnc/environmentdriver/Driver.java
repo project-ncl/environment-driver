@@ -107,6 +107,8 @@ public class Driver {
 
     private static final Logger logger = LoggerFactory.getLogger(Driver.class);
 
+    public static final String ARCHIVAL_SERVICE_BUILD_CONFIG_ID = "build.config.id";
+
     public static final String ERROR_MESSAGE_INTRO = "\n\nAn error occurred while trying to create a build environment where to run the build. ";
     public static final String ERROR_MESSAGE_REGISTRY = "The builder pod failed to download the builder image "
             + "(this could be due to issues with the builder images registry, or a misconfiguration of the builder image name).";
@@ -191,6 +193,10 @@ public class Driver {
         podTemplateProperties.put("containerPort", configuration.getBuildAgentContainerPort());
         podTemplateProperties.put("buildContentId", environmentCreateRequest.getRepositoryBuildContentId());
         podTemplateProperties.put("accessToken", rawWebToken);
+
+        if (configuration.isSidecarArchiveEnabled()) {
+            podTemplateProperties.put(ARCHIVAL_SERVICE_BUILD_CONFIG_ID, environmentCreateRequest.getBuildConfigId());
+        }
 
         try {
             podTemplateProperties.putAll(mdcToMap());

@@ -161,4 +161,6 @@ public class Configuration {
     @ConfigProperty(name = "environment-driver.callback-retry-max-delay-msec", defaultValue = "5000")
     long callbackRetryMaxDelayMsec;
 
+    @ConfigProperty(name = "environment-driver.indy-sidecar.archive-enabled", defaultValue = "false")
+    boolean sidecarArchiveEnabled;
 }
