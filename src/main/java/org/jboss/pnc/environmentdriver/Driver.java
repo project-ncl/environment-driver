@@ -196,6 +196,8 @@ public class Driver {
 
         if (configuration.isSidecarArchiveEnabled()) {
             podTemplateProperties.put(ARCHIVAL_SERVICE_BUILD_CONFIG_ID, environmentCreateRequest.getBuildConfigId());
+        } else {
+            podTemplateProperties.put(ARCHIVAL_SERVICE_BUILD_CONFIG_ID, "");
         }
 
         try {
