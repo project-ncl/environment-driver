@@ -194,6 +194,7 @@ public class Driver {
         podTemplateProperties.put("buildContentId", environmentCreateRequest.getRepositoryBuildContentId());
         podTemplateProperties.put("accessToken", rawWebToken);
 
+        podTemplateProperties.put("workingDirectory", configuration.getWorkingDirectory());
         if (configuration.isSidecarArchiveEnabled()) {
             podTemplateProperties.put(ARCHIVAL_SERVICE_BUILD_CONFIG_ID, environmentCreateRequest.getBuildConfigId());
         } else {
