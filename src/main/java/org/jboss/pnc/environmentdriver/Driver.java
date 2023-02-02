@@ -520,8 +520,11 @@ public class Driver {
                             gaugeMetric.ifPresent(g -> g.incrementMetric(METRICS_POD_STARTED_FAILED_KEY));
                         }
                     } else {
-                        EnvironmentCreateResult environmentCreateResult = EnvironmentCreateResult
-                                .success(serviceUriWithContext, configuration.getWorkingDirectory(), sshPassword);
+                        EnvironmentCreateResult environmentCreateResult = EnvironmentCreateResult.success(
+                                serviceUriWithContext,
+                                configuration.getWorkingDirectory(),
+                                sshPassword,
+                                configuration.isSidecarArchiveEnabled());
                         callback = callback(completionCallback, environmentCreateResult);
                         gaugeMetric.ifPresent(g -> g.incrementMetric(METRICS_POD_STARTED_SUCCESS_KEY));
                     }
