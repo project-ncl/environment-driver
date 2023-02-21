@@ -1,6 +1,6 @@
 quarkus:
   shutdown:
-    timeout: 300
+    timeout: 30
   log:
     category:
       "org.jboss.pnc":
