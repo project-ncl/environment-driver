@@ -95,6 +95,9 @@ public class Configuration {
     @ConfigProperty(name = "environment-driver.openshift.pod")
     String podDefinition;
 
+    @ConfigProperty(name = "environment-driver.openshift.pod-with-archive")
+    String podWithArchiveDefinition;
+
     @ConfigProperty(name = "environment-driver.openshift.service")
     String serviceDefinition;
 

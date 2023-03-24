@@ -107,7 +107,7 @@ public class Driver {
 
     private static final Logger logger = LoggerFactory.getLogger(Driver.class);
 
-    public static final String ARCHIVAL_SERVICE_BUILD_CONFIG_ID = "build.config.id";
+    public static final String ARCHIVAL_SERVICE_BUILD_CONFIG_ID = "BUILD_CONFIG_ID";
 
     public static final String ERROR_MESSAGE_INTRO = "\n\nAn error occurred while trying to create a build environment where to run the build. ";
     public static final String ERROR_MESSAGE_REGISTRY = "The builder pod failed to download the builder image "
@@ -225,8 +225,15 @@ public class Driver {
             sshPassword = "";
         }
 
+        String podDefinition;
+        if (configuration.isSidecarArchiveEnabled()) {
+            podDefinition = configuration.getPodWithArchiveDefinition();
+        } else {
+            podDefinition = configuration.getPodDefinition();
+        }
+
         CompletableFuture<Pod> podRequested = CompletableFuture.supplyAsync(() -> {
-            Pod podCreationModel = createModelNode(configuration.getPodDefinition(), podTemplateProperties, Pod.class);
+            Pod podCreationModel = createModelNode(podDefinition, podTemplateProperties, Pod.class);
             return openShiftClient.pods().create(podCreationModel);
         }, executor);
 
@@ -239,7 +246,7 @@ public class Driver {
         }, executor);
 
         // Handle the exceptions thrown by requests (e.g. KubernetesClientException for exceeded quota)
-        CompletableFuture<Void> requestFailure = new CompletableFuture<Void>();
+        CompletableFuture<Void> requestFailure = new CompletableFuture<>();
         podRequested.exceptionally(ex -> {
             requestFailure.completeExceptionally(ex);
             return null;
@@ -479,7 +486,7 @@ public class Driver {
         // Do not wait for both podRunning and serviceRunning completion, one exception
         // of them is enough to stop
         // waiting for the other
-        CompletableFuture<Void> failure = new CompletableFuture<Void>();
+        CompletableFuture<Void> failure = new CompletableFuture<>();
         podRunning.exceptionally(ex -> {
             failure.completeExceptionally(ex);
             return null;
@@ -673,7 +680,7 @@ public class Driver {
             Pod pod = openShiftClient.pods().withName(podName).get();
             String podStatus = pod.getStatus().getPhase();
             // Get all the termination or waiting reasons for the containers inside the Pod
-            Set<String> containerStatuses = new HashSet<String>();
+            Set<String> containerStatuses = new HashSet<>();
             if (pod.getStatus().getInitContainerStatuses() != null) {
                 for (ContainerStatus containerStatus : pod.getStatus().getInitContainerStatuses()) {
                     if (containerStatus.getState() != null) {
