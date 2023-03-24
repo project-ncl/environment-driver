@@ -83,6 +83,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.exc.MismatchedInputException;
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 
+import io.fabric8.kubernetes.api.model.Container;
 import io.fabric8.kubernetes.api.model.ContainerStatus;
 import io.fabric8.kubernetes.api.model.HasMetadata;
 import io.fabric8.kubernetes.api.model.Pod;
@@ -107,7 +108,7 @@ public class Driver {
 
     private static final Logger logger = LoggerFactory.getLogger(Driver.class);
 
-    public static final String ARCHIVAL_SERVICE_BUILD_CONFIG_ID = "build.config.id";
+    public static final String ARCHIVAL_SERVICE_BUILD_CONFIG_ID = "BUILD_CONFIG_ID";
 
     public static final String ERROR_MESSAGE_INTRO = "\n\nAn error occurred while trying to create a build environment where to run the build. ";
     public static final String ERROR_MESSAGE_REGISTRY = "The builder pod failed to download the builder image "
@@ -225,8 +226,11 @@ public class Driver {
             sshPassword = "";
         }
 
+        String podDefinition = configuration.getPodDefinition();
+
         CompletableFuture<Pod> podRequested = CompletableFuture.supplyAsync(() -> {
-            Pod podCreationModel = createModelNode(configuration.getPodDefinition(), podTemplateProperties, Pod.class);
+            Pod podCreationModel = createModelNode(podDefinition, podTemplateProperties, Pod.class);
+            processPod(podCreationModel, configuration.isSidecarEnabled(), configuration.isSidecarArchiveEnabled());
             return openShiftClient.pods().create(podCreationModel);
         }, executor);
 
@@ -239,7 +243,7 @@ public class Driver {
         }, executor);
 
         // Handle the exceptions thrown by requests (e.g. KubernetesClientException for exceeded quota)
-        CompletableFuture<Void> requestFailure = new CompletableFuture<Void>();
+        CompletableFuture<Void> requestFailure = new CompletableFuture<>();
         podRequested.exceptionally(ex -> {
             requestFailure.completeExceptionally(ex);
             return null;
@@ -282,6 +286,27 @@ public class Driver {
             throw new UnableToRequestResourcesException(
                     rootCause != null ? rootCause.getMessage() : throwable.getMessage());
         });
+    }
+
+    private void processPod(Pod pod, boolean sidecarEnabled, boolean sidecarArchiveEnabled) {
+        if (!sidecarEnabled) {
+            List<Container> containers = pod.getSpec().getContainers();
+            Optional<Container> sidecarContainer = containers.stream()
+                    .filter(c -> "sidecar".equals(c.getName()))
+                    .findFirst();
+            if (!sidecarContainer.isEmpty()) {
+                containers.remove(sidecarContainer.get());
+            }
+        }
+        if (!sidecarArchiveEnabled) {
+            List<Container> initContainers = pod.getSpec().getInitContainers();
+            Optional<Container> sidecarInitContainer = initContainers.stream()
+                    .filter(c -> "sidecar-init".equals(c.getName()))
+                    .findFirst();
+            if (!sidecarInitContainer.isEmpty()) {
+                initContainers.remove(sidecarInitContainer.get());
+            }
+        }
     }
 
     private Request getCancelRequest(String environmentId, String rawWebToken) {
@@ -479,7 +504,7 @@ public class Driver {
         // Do not wait for both podRunning and serviceRunning completion, one exception
         // of them is enough to stop
         // waiting for the other
-        CompletableFuture<Void> failure = new CompletableFuture<Void>();
+        CompletableFuture<Void> failure = new CompletableFuture<>();
         podRunning.exceptionally(ex -> {
             failure.completeExceptionally(ex);
             return null;
@@ -673,7 +698,7 @@ public class Driver {
             Pod pod = openShiftClient.pods().withName(podName).get();
             String podStatus = pod.getStatus().getPhase();
             // Get all the termination or waiting reasons for the containers inside the Pod
-            Set<String> containerStatuses = new HashSet<String>();
+            Set<String> containerStatuses = new HashSet<>();
             if (pod.getStatus().getInitContainerStatuses() != null) {
                 for (ContainerStatus containerStatus : pod.getStatus().getInitContainerStatuses()) {
                     if (containerStatus.getState() != null) {
