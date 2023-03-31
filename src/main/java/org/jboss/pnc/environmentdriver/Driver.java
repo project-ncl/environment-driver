@@ -196,7 +196,7 @@ public class Driver {
         podTemplateProperties.put("accessToken", rawWebToken);
 
         podTemplateProperties.put("workingDirectory", configuration.getWorkingDirectory());
-        if (configuration.isSidecarArchiveEnabled()) {
+        if (environmentCreateRequest.isSidecarArchiveEnabled()) {
             podTemplateProperties.put(ARCHIVAL_SERVICE_BUILD_CONFIG_ID, environmentCreateRequest.getBuildConfigId());
         } else {
             podTemplateProperties.put(ARCHIVAL_SERVICE_BUILD_CONFIG_ID, "");
@@ -230,7 +230,10 @@ public class Driver {
 
         CompletableFuture<Pod> podRequested = CompletableFuture.supplyAsync(() -> {
             Pod podCreationModel = createModelNode(podDefinition, podTemplateProperties, Pod.class);
-            processPod(podCreationModel, configuration.isSidecarEnabled(), configuration.isSidecarArchiveEnabled());
+            processPod(
+                    podCreationModel,
+                    environmentCreateRequest.isSidecarEnabled(),
+                    environmentCreateRequest.isSidecarArchiveEnabled());
             return openShiftClient.pods().create(podCreationModel);
         }, executor);
 
@@ -545,11 +548,8 @@ public class Driver {
                             gaugeMetric.ifPresent(g -> g.incrementMetric(METRICS_POD_STARTED_FAILED_KEY));
                         }
                     } else {
-                        EnvironmentCreateResult environmentCreateResult = EnvironmentCreateResult.success(
-                                serviceUriWithContext,
-                                configuration.getWorkingDirectory(),
-                                sshPassword,
-                                configuration.isSidecarArchiveEnabled());
+                        EnvironmentCreateResult environmentCreateResult = EnvironmentCreateResult
+                                .success(serviceUriWithContext, configuration.getWorkingDirectory(), sshPassword);
                         callback = callback(completionCallback, environmentCreateResult);
                         gaugeMetric.ifPresent(g -> g.incrementMetric(METRICS_POD_STARTED_SUCCESS_KEY));
                     }
