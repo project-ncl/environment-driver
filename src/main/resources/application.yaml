@@ -36,10 +36,11 @@ quarkus:
         policy-enforcer:
           enable: false
 
+  # [NCL-7901] Disable Opentelmetry for PNC 2.5
   opentelemetry:
-    enabled: true
+    enabled: false
     tracer:
-      enabled: true
+      enabled: false
       # reflect sampling on collector
       resource-attributes: "sampler_ratio=0.05,service.name=environment-driver"
       sampler:
