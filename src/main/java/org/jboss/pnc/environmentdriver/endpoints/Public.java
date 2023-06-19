@@ -18,24 +18,23 @@
 
 package org.jboss.pnc.environmentdriver.endpoints;
 
+import java.time.ZonedDateTime;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 
 import javax.inject.Inject;
-import javax.ws.rs.Consumes;
-import javax.ws.rs.POST;
-import javax.ws.rs.PUT;
-import javax.ws.rs.Path;
-import javax.ws.rs.PathParam;
-import javax.ws.rs.Produces;
+import javax.ws.rs.*;
 import javax.ws.rs.core.MediaType;
 
 import io.quarkus.security.Authenticated;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
+import org.jboss.pnc.api.dto.ComponentVersion;
 import org.jboss.pnc.api.environmentdriver.dto.EnvironmentCompleteRequest;
 import org.jboss.pnc.api.environmentdriver.dto.EnvironmentCompleteResponse;
 import org.jboss.pnc.api.environmentdriver.dto.EnvironmentCreateRequest;
 import org.jboss.pnc.api.environmentdriver.dto.EnvironmentCreateResponse;
 import org.jboss.pnc.common.Strings;
+import org.jboss.pnc.environmentdriver.BuildInformationConstants;
 import org.jboss.pnc.environmentdriver.Driver;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -53,6 +52,9 @@ public class Public {
 
     @Inject
     Driver driver;
+
+    @ConfigProperty(name = "quarkus.application.name")
+    String name;
 
     /**
      * Create new build environment for a given configuration. EnvironmentId which is created based on
@@ -104,5 +106,16 @@ public class Public {
         logger.info("Requested environment destroy: {}", environmentId);
         driver.destroy(environmentId);
         return new EnvironmentCompleteResponse(null, -1);
+    }
+
+    @GET
+    @Path("/version")
+    public ComponentVersion getVersion() {
+        return ComponentVersion.builder()
+                .name(name)
+                .version(BuildInformationConstants.VERSION)
+                .commit(BuildInformationConstants.COMMIT_HASH)
+                .builtOn(ZonedDateTime.parse(BuildInformationConstants.BUILD_TIME))
+                .build();
     }
 }
