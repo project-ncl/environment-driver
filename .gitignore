@@ -34,3 +34,6 @@ pom.xml.tag
 pom.xml.releaseBackup
 pom.xml.versionsBackup
 release.properties
+
+# Ignore code-generated class that will change on every build
+src/main/java/org/jboss/pnc/environmentdriver/BuildInformationConstants.java
