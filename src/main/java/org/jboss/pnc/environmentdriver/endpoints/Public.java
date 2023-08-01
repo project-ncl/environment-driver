@@ -22,11 +22,11 @@ import java.time.ZonedDateTime;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 
+import javax.annotation.security.RolesAllowed;
 import javax.inject.Inject;
 import javax.ws.rs.*;
 import javax.ws.rs.core.MediaType;
 
-import io.quarkus.security.Authenticated;
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.pnc.api.dto.ComponentVersion;
 import org.jboss.pnc.api.environmentdriver.dto.EnvironmentCompleteRequest;
@@ -60,7 +60,7 @@ public class Public {
      * Create new build environment for a given configuration. EnvironmentId which is created based on
      * {@link EnvironmentCreateRequest#getEnvironmentLabel()} is returned.
      */
-    @Authenticated
+    @RolesAllowed({ "pnc-users-environment-driver-admin", "pnc-users-admin" })
     @POST
     @Path("/create")
     public CompletionStage<EnvironmentCreateResponse> create(EnvironmentCreateRequest environmentCreateRequest) {
@@ -73,7 +73,7 @@ public class Public {
      * connection to the environment.
      *
      */
-    @Authenticated
+    @RolesAllowed({ "pnc-users-environment-driver-admin", "pnc-users-admin" })
     @PUT
     @Path("/complete")
     public CompletionStage<EnvironmentCompleteResponse> complete(
@@ -99,7 +99,7 @@ public class Public {
      * The complete request have to hit the same service instance as create to cancel potentially active create
      * operations.
      */
-    @Authenticated
+    @RolesAllowed({ "pnc-users-environment-driver-admin", "pnc-users-admin" })
     @PUT
     @Path("/cancel/{environmentId}")
     public EnvironmentCompleteResponse cancel(@PathParam("environmentId") String environmentId) {
