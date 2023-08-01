@@ -35,6 +35,11 @@ quarkus:
       keycloak:
         policy-enforcer:
           enable: false
+  oidc-client:
+    auth-server-url: https://keycloak-host/auth/realms/pncredhat
+    client-id: service-account
+    credentials:
+      secret: secret-of-service-account
 
   opentelemetry:
     enabled: true
@@ -205,6 +210,8 @@ environment-driver:
 "%test":
   quarkus:
     oidc:
+      enabled: false
+    oidc-client:
       enabled: false
     log:
       console:
