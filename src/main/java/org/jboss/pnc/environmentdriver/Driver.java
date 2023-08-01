@@ -47,6 +47,7 @@ import javax.enterprise.context.RequestScoped;
 import javax.inject.Inject;
 import javax.ws.rs.core.MediaType;
 
+import io.quarkus.oidc.client.OidcClient;
 import org.apache.commons.lang3.RandomStringUtils;
 import org.apache.commons.text.StringSubstitutor;
 import org.eclipse.microprofile.context.ManagedExecutor;
@@ -149,6 +150,9 @@ public class Driver {
 
     @Inject
     ApplicationLifecycle lifecycle;
+
+    @Inject
+    OidcClient oidcClient;
 
     ObjectMapper yamlMapper = new ObjectMapper(new YAMLFactory());
 
@@ -836,6 +840,9 @@ public class Driver {
                 .method(callback.getMethod().name(), HttpRequest.BodyPublishers.ofString(body))
                 .timeout(Duration.ofSeconds(configuration.getHttpClientRequestTimeout()));
         callback.getHeaders().forEach(h -> builder.header(h.getName(), h.getValue()));
+
+        // Add the service account's access token.
+        builder.header(javax.ws.rs.core.HttpHeaders.AUTHORIZATION, "Bearer " + getFreshAccessToken());
         HttpRequest request = builder.build();
 
         RetryPolicy<HttpResponse<String>> retryPolicy = new RetryPolicy<HttpResponse<String>>()
@@ -1029,4 +1036,13 @@ public class Driver {
         return list.isEmpty() ? null : list.get(list.size() - 1);
     }
 
+    /**
+     * Get a fresh access token for the service account. This is done because we want to get a super-new token to be
+     * used since we're not entirely sure when the http request will be done inside the completablefuture.
+     *
+     * @return fresh access token
+     */
+    private String getFreshAccessToken() {
+        return oidcClient.getTokens().await().indefinitely().getAccessToken();
+    }
 }
