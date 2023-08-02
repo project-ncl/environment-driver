@@ -411,11 +411,8 @@ public class Driver {
         Failsafe.with(serviceRetryPolicy).with(executor).runAsync(() -> {
             Service service = openShiftClient.services().withName(serviceName).get();
             if (service != null) {
-                if (openShiftClient.services().delete(service)) {
-                    logger.info("Service {} deleted.", serviceName);
-                } else {
-                    logger.warn("Service {} was not deleted.", serviceName);
-                }
+                openShiftClient.services().delete(service);
+                logger.info("Service {} deleted.", serviceName);
             } else {
                 logger.warn("Service {} does not exists.", serviceName);
             }
@@ -425,11 +422,8 @@ public class Driver {
         Failsafe.with(podRetryPolicy).with(executor).runAsync(() -> {
             Pod pod = openShiftClient.pods().withName(podName).get();
             if (pod != null) {
-                if (openShiftClient.pods().delete(pod)) {
-                    logger.info("Pod {} deleted.", podName);
-                } else {
-                    logger.warn("Pod {} was not deleted.", podName);
-                }
+                openShiftClient.pods().delete(pod);
+                logger.info("Pod {} deleted.", podName);
             } else {
                 logger.warn("Pod {} does not exists.", podName);
             }
@@ -466,11 +460,8 @@ public class Driver {
         Failsafe.with(servicesRetryPolicy).with(executor).runAsync(() -> {
             ServiceList serviceList = openShiftClient.services().withLabel("environment", environmentLabel).list();
             if (serviceList != null) {
-                if (openShiftClient.services().delete(serviceList.getItems())) {
-                    logger.info("Services {} deleted.", getItemNames(serviceList.getItems()));
-                } else {
-                    logger.warn("Services {} were not deleted.", getItemNames(serviceList.getItems()));
-                }
+                openShiftClient.services().delete(serviceList.getItems());
+                logger.info("Services {} deleted.", getItemNames(serviceList.getItems()));
             } else {
                 logger.warn("No services found by label {}.", environmentLabel);
             }
@@ -480,11 +471,8 @@ public class Driver {
         Failsafe.with(podsRetryPolicy).with(executor).runAsync(() -> {
             PodList podList = openShiftClient.pods().withLabel("environment", environmentLabel).list();
             if (podList != null) {
-                if (openShiftClient.pods().delete(podList.getItems())) {
-                    logger.info("Pods {} deleted.", getItemNames(podList.getItems()));
-                } else {
-                    logger.warn("Pods {} were not deleted.", getItemNames(podList.getItems()));
-                }
+                openShiftClient.pods().delete(podList.getItems());
+                logger.info("Pods {} deleted.", getItemNames(podList.getItems()));
             } else {
                 logger.warn("No pods found by label {}.", environmentLabel);
             }
