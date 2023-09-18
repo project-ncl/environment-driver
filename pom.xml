@@ -75,7 +75,7 @@
     <version.commons-text>1.10.0</version.commons-text>
     <version.lombok>1.18.28</version.lombok>
 
-    <version.javadoc.plugin>3.5.0</version.javadoc.plugin>
+    <version.javadoc.plugin>3.6.0</version.javadoc.plugin>
     <version.source.plugin>3.3.0</version.source.plugin>
     <tagSuffix />
   </properties>
