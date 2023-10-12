@@ -41,7 +41,7 @@ public interface IndyService {
      *
      * @return Token DTO
      */
-    @Path("/api/security/token")
+    @Path("/api/security/auth/token")
     @Produces(MediaType.APPLICATION_JSON)
     @Consumes(MediaType.APPLICATION_JSON)
     @POST
