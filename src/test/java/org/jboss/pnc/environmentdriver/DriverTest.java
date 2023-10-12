@@ -38,9 +38,11 @@ import io.fabric8.kubernetes.client.dsl.ServiceResource;
 import io.fabric8.openshift.client.OpenShiftClient;
 import io.quarkus.test.junit.QuarkusMock;
 import io.quarkus.test.junit.QuarkusTest;
+import io.quarkus.test.junit.mockito.InjectMock;
 import io.quarkus.test.security.TestSecurity;
 import io.restassured.RestAssured;
 import org.eclipse.microprofile.config.ConfigProvider;
+import org.eclipse.microprofile.rest.client.inject.RestClient;
 import org.jboss.pnc.api.constants.HttpHeaders;
 import org.jboss.pnc.api.constants.MDCHeaderKeys;
 import org.jboss.pnc.api.dto.Request;
@@ -48,6 +50,9 @@ import org.jboss.pnc.api.enums.ResultStatus;
 import org.jboss.pnc.api.environmentdriver.dto.EnvironmentCreateRequest;
 import org.jboss.pnc.api.environmentdriver.dto.EnvironmentCreateResponse;
 import org.jboss.pnc.api.environmentdriver.dto.EnvironmentCreateResult;
+import org.jboss.pnc.environmentdriver.clients.IndyService;
+import org.jboss.pnc.environmentdriver.clients.IndyTokenRequestDTO;
+import org.jboss.pnc.environmentdriver.clients.IndyTokenResponseDTO;
 import org.jboss.pnc.environmentdriver.invokerserver.CallbackHandler;
 import org.jboss.pnc.environmentdriver.invokerserver.HttpServer;
 import org.jboss.pnc.environmentdriver.invokerserver.PingHandler;
@@ -56,6 +61,7 @@ import org.jboss.pnc.environmentdriver.invokerserver.ServletInstanceFactory;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.slf4j.Logger;
@@ -86,6 +92,10 @@ public class DriverTest {
     private static final BlockingQueue<Request> callbackRequests = new ArrayBlockingQueue<>(100);
     private static final BlockingQueue<Request> pingRequests = new ArrayBlockingQueue<>(100);
 
+    @InjectMock
+    @RestClient
+    IndyService indyService;
+
     @BeforeAll
     public static void beforeClass() throws Exception {
         // uncomment to log all requests
@@ -104,6 +114,11 @@ public class DriverTest {
                         new ServletInstanceFactory(new PingHandler(pingRequests::add)),
                         "/*"));
         callbackServer.start(8082, BIND_HOST);
+    }
+
+    @BeforeEach
+    public void setup() {
+        when(indyService.getAuthToken(any(IndyTokenRequestDTO.class), any(String.class))).thenReturn(new IndyTokenResponseDTO("token-for-builder-pod"));
     }
 
     @AfterAll
