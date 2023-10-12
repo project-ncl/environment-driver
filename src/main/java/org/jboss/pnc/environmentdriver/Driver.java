@@ -51,7 +51,7 @@ import io.quarkus.oidc.client.OidcClient;
 import org.apache.commons.lang3.RandomStringUtils;
 import org.apache.commons.text.StringSubstitutor;
 import org.eclipse.microprofile.context.ManagedExecutor;
-import org.eclipse.microprofile.jwt.JsonWebToken;
+import org.eclipse.microprofile.rest.client.inject.RestClient;
 import org.jboss.pnc.api.constants.HttpHeaders;
 import org.jboss.pnc.api.constants.MDCHeaderKeys;
 import org.jboss.pnc.api.constants.MDCKeys;
@@ -64,6 +64,9 @@ import org.jboss.pnc.common.Random;
 import org.jboss.pnc.common.Strings;
 import org.jboss.pnc.common.log.MDCUtils;
 import org.jboss.pnc.common.otel.OtelUtils;
+import org.jboss.pnc.environmentdriver.clients.IndyService;
+import org.jboss.pnc.environmentdriver.clients.IndyTokenRequestDTO;
+import org.jboss.pnc.environmentdriver.clients.IndyTokenResponseDTO;
 import org.jboss.pnc.environmentdriver.enums.PodErrorStatuses;
 import org.jboss.pnc.environmentdriver.exceptions.BadResourcesRequestException;
 import org.jboss.pnc.environmentdriver.exceptions.DriverException;
@@ -128,9 +131,6 @@ public class Driver {
     Logger userLogger;
 
     @Inject
-    JsonWebToken webToken;
-
-    @Inject
     ManagedExecutor executor;
 
     @Inject
@@ -154,6 +154,9 @@ public class Driver {
     @Inject
     OidcClient oidcClient;
 
+    @RestClient
+    IndyService indyService;
+
     ObjectMapper yamlMapper = new ObjectMapper(new YAMLFactory());
 
     private Optional<GaugeMetric> gaugeMetric = Optional.empty(); // TODO
@@ -172,13 +175,15 @@ public class Driver {
         if (lifecycle.isShuttingDown()) {
             throw new StoppingException();
         }
+
+        IndyTokenResponseDTO tokenResponseDTO = indyService.getAuthToken(
+                new IndyTokenRequestDTO(environmentCreateRequest.getRepositoryBuildContentId()),
+                "Bearer " + getFreshAccessToken());
+
         String environmentId = environmentCreateRequest.getEnvironmentLabel() + "-" + Random.randString(6);
 
         String podName = getPodName(environmentId);
         String serviceName = getServiceName(environmentId);
-
-        // TODO: remove once we figure out which token to use with Indy
-        String rawWebToken = webToken.getRawToken();
 
         Map<String, String> podTemplateProperties = new HashMap<>();
 
@@ -199,7 +204,7 @@ public class Driver {
         podTemplateProperties.put("containerPort", configuration.getBuildAgentContainerPort());
         podTemplateProperties.put("buildContentId", environmentCreateRequest.getRepositoryBuildContentId());
         // TODO: use another style of token for the accessToken with Indy
-        podTemplateProperties.put("accessToken", rawWebToken);
+        podTemplateProperties.put("accessToken", tokenResponseDTO.getToken());
 
         podTemplateProperties.put("workingDirectory", configuration.getWorkingDirectory());
         if (environmentCreateRequest.isSidecarArchiveEnabled()) {

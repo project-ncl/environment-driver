@@ -40,7 +40,9 @@ quarkus:
     client-id: service-account
     credentials:
       secret: secret-of-service-account
-
+  rest-client:
+    indy-service:
+      url: "http://localhost:8080"
   opentelemetry:
     enabled: true
     tracer:

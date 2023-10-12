@@ -15,36 +15,23 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package org.jboss.pnc.environmentdriver.clients;
 
-package org.jboss.pnc.environmentdriver;
-
-import io.quarkus.test.Mock;
-import org.eclipse.microprofile.jwt.JsonWebToken;
-
-import java.util.Set;
+import com.fasterxml.jackson.annotation.JsonProperty;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.extern.jackson.Jacksonized;
 
 /**
- * @author <a href="mailto:matejonnet@gmail.com">Matej Lazar</a>
+ * DTO of the Indy token endpoint request
  */
-@Mock
-public class JsonWebTokenMock implements JsonWebToken {
-    @Override
-    public String getName() {
-        return null;
-    }
+@Jacksonized
+@Builder
+@Data
+@AllArgsConstructor
+public class IndyTokenRequestDTO {
 
-    @Override
-    public Set<String> getClaimNames() {
-        return null;
-    }
-
-    @Override
-    public <T> T getClaim(String claimName) {
-        return null;
-    }
-
-    @Override
-    public String getRawToken() {
-        return "-raw-auth-token-";
-    }
+    @JsonProperty("build-id")
+    private String buildId;
 }
