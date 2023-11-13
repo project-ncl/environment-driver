@@ -65,7 +65,7 @@
     <quarkus.platform.artifact-id>quarkus-universe-bom</quarkus.platform.artifact-id>
     <quarkus.platform.group-id>io.quarkus</quarkus.platform.group-id>
     <compiler-plugin.version>3.11.0</compiler-plugin.version>
-    <surefire-plugin.version>3.2.1</surefire-plugin.version>
+    <surefire-plugin.version>3.2.2</surefire-plugin.version>
     <quarkus.package.type>uber-jar</quarkus.package.type>
 
     <version.pnc-api>2.4.6</version.pnc-api>
