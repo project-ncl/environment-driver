@@ -60,7 +60,7 @@ public class Public {
      * Create new build environment for a given configuration. EnvironmentId which is created based on
      * {@link EnvironmentCreateRequest#getEnvironmentLabel()} is returned.
      */
-    @RolesAllowed({ "pnc-users-environment-driver-admin", "pnc-users-admin" })
+    @RolesAllowed({ "pnc-app-environment-driver-user", "pnc-users-admin" })
     @POST
     @Path("/create")
     public CompletionStage<EnvironmentCreateResponse> create(EnvironmentCreateRequest environmentCreateRequest) {
@@ -73,7 +73,7 @@ public class Public {
      * connection to the environment.
      *
      */
-    @RolesAllowed({ "pnc-users-environment-driver-admin", "pnc-users-admin" })
+    @RolesAllowed({ "pnc-app-environment-driver-user", "pnc-users-admin" })
     @PUT
     @Path("/complete")
     public CompletionStage<EnvironmentCompleteResponse> complete(
@@ -99,7 +99,7 @@ public class Public {
      * The complete request have to hit the same service instance as create to cancel potentially active create
      * operations.
      */
-    @RolesAllowed({ "pnc-users-environment-driver-admin", "pnc-users-admin" })
+    @RolesAllowed({ "pnc-app-environment-driver-user", "pnc-users-admin" })
     @PUT
     @Path("/cancel/{environmentId}")
     public EnvironmentCompleteResponse cancel(@PathParam("environmentId") String environmentId) {
