@@ -50,6 +50,8 @@ import org.jboss.pnc.api.enums.ResultStatus;
 import org.jboss.pnc.api.environmentdriver.dto.EnvironmentCreateRequest;
 import org.jboss.pnc.api.environmentdriver.dto.EnvironmentCreateResponse;
 import org.jboss.pnc.api.environmentdriver.dto.EnvironmentCreateResult;
+import org.jboss.pnc.bifrost.upload.BifrostLogUploader;
+import org.jboss.pnc.bifrost.upload.LogMetadata;
 import org.jboss.pnc.environmentdriver.clients.IndyService;
 import org.jboss.pnc.environmentdriver.clients.IndyTokenRequestDTO;
 import org.jboss.pnc.environmentdriver.clients.IndyTokenResponseDTO;
@@ -72,6 +74,8 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.RETURNS_DEEP_STUBS;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
@@ -95,6 +99,9 @@ public class DriverTest {
     @InjectMock
     @RestClient
     IndyService indyService;
+
+    @InjectMock
+    BifrostLogUploader bifrostLogUploader;
 
     @BeforeAll
     public static void beforeClass() throws Exception {
@@ -165,6 +172,9 @@ public class DriverTest {
                 creationCompleted.getStatus(),
                 "Unexpected environment creation status.");
         Assertions.assertEquals(2, pingRequests.size(), "Unexpected number of received pings.");
+
+        // verify bifrost log uploader was called
+        verify(bifrostLogUploader, times(1)).uploadString(any(String.class), any(LogMetadata.class));
 
         // clean up
         EnvironmentCreateRequest destroyRequest = EnvironmentCreateRequest.builder()
@@ -250,12 +260,13 @@ public class DriverTest {
             EnvironmentCreateResult creationCompleted = mapper
                     .convertValue(callback.getAttachment(), EnvironmentCreateResult.class);
             logger.info("Environment creation completed with status: {}", creationCompleted.getStatus());
-            Assertions.assertEquals(
-                    ResultStatus.FAILED,
-                    creationCompleted.getStatus(),
-                    "Unexpected environment creation status.");
+            String message = "Unexpected environment creation status.";
+            Assertions.assertEquals(ResultStatus.FAILED, creationCompleted.getStatus(), message);
             logger.info("CreationCompleted.message: [{}]", creationCompleted.getMessage());
             Assertions.assertEquals(0, pingRequests.size(), "Unexpected number of received pings.");
+
+            // verify bifrost log uploader was called
+            verify(bifrostLogUploader, times(1)).uploadString(any(String.class), any(LogMetadata.class));
 
             // clean up
             EnvironmentCreateRequest destroyRequest = EnvironmentCreateRequest.builder()

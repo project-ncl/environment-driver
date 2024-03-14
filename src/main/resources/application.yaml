@@ -311,6 +311,9 @@ environment-driver:
               targetPort: %{containerPort}
               nodePort: 0
           clusterIP: 127.0.0.1
+  bifrost-uploader:
+    api-url: "http://localhost:9999"
+
 "%dev":
   quarkus:
     log:
