@@ -28,8 +28,10 @@ import java.net.URI;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
+import java.time.OffsetDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -45,6 +47,7 @@ import java.util.stream.Collectors;
 
 import javax.enterprise.context.RequestScoped;
 import javax.inject.Inject;
+import javax.security.auth.callback.Callback;
 import javax.ws.rs.core.MediaType;
 
 import io.quarkus.oidc.client.OidcClient;
@@ -60,6 +63,8 @@ import org.jboss.pnc.api.environmentdriver.dto.EnvironmentCompleteResponse;
 import org.jboss.pnc.api.environmentdriver.dto.EnvironmentCreateRequest;
 import org.jboss.pnc.api.environmentdriver.dto.EnvironmentCreateResponse;
 import org.jboss.pnc.api.environmentdriver.dto.EnvironmentCreateResult;
+import org.jboss.pnc.bifrost.upload.BifrostLogUploader;
+import org.jboss.pnc.bifrost.upload.LogMetadata;
 import org.jboss.pnc.common.Random;
 import org.jboss.pnc.common.Strings;
 import org.jboss.pnc.common.log.MDCUtils;
@@ -153,6 +158,9 @@ public class Driver {
 
     @Inject
     OidcClient oidcClient;
+
+    @Inject
+    BifrostLogUploader bifrostLogUploader;
 
     @RestClient
     IndyService indyService;
@@ -270,13 +278,15 @@ public class Driver {
         // Do not wait for both podRequested and serviceRequested completion, one exception
         // of them is enough to stop waiting for the other
         CompletableFuture<Void> podAndServiceRequested = CompletableFuture.allOf(podRequested, serviceRequested);
+        Map<String, String> mdc = MDCUtils.getHeadersFromMDC();
         return CompletableFuture.anyOf(requestFailure, podAndServiceRequested).thenApplyAsync((nul) -> {
             startMonitor(
                     serviceName,
                     buildAgentContextPath,
                     podName,
                     environmentCreateRequest.getCompletionCallback(),
-                    sshPassword);
+                    sshPassword,
+                    mdc);
             return new EnvironmentCreateResponse(environmentId, getCancelRequest(environmentId));
         }, executor).exceptionally(throwable -> {
 
@@ -495,7 +505,8 @@ public class Driver {
             String buildAgentContextPath,
             String podName,
             Request completionCallback,
-            String sshPassword) {
+            String sshPassword,
+            Map<String, String> mdc) {
         lifecycle.addActiveOperation();
         CompletableFuture<URI> serviceRunning = isServiceRunning(serviceName);
         activeMonitors.add(podName, serviceRunning);
@@ -533,23 +544,26 @@ public class Driver {
                         if (throwable instanceof CancellationException
                                 || throwable.getCause() instanceof CancellationException) {
 
-                            callback = callback(completionCallback, EnvironmentCreateResult.cancelled());
+                            callback = callback(completionCallback, EnvironmentCreateResult.cancelled(), mdc);
 
                         } else if (throwable instanceof TemporarilyUnableToStartException
                                 || throwable.getCause() instanceof TemporarilyUnableToStartException) {
 
-                            callback = callback(completionCallback, EnvironmentCreateResult.systemError(throwable));
+                            callback = callback(
+                                    completionCallback,
+                                    EnvironmentCreateResult.systemError(throwable),
+                                    mdc);
                             gaugeMetric.ifPresent(g -> g.incrementMetric(METRICS_POD_STARTED_FAILED_KEY));
 
                         } else {
 
-                            callback = callback(completionCallback, EnvironmentCreateResult.failed(throwable));
+                            callback = callback(completionCallback, EnvironmentCreateResult.failed(throwable), mdc);
                             gaugeMetric.ifPresent(g -> g.incrementMetric(METRICS_POD_STARTED_FAILED_KEY));
                         }
                     } else {
                         EnvironmentCreateResult environmentCreateResult = EnvironmentCreateResult
                                 .success(serviceUriWithContext, configuration.getWorkingDirectory(), sshPassword);
-                        callback = callback(completionCallback, environmentCreateResult);
+                        callback = callback(completionCallback, environmentCreateResult, mdc);
                         gaugeMetric.ifPresent(g -> g.incrementMetric(METRICS_POD_STARTED_SUCCESS_KEY));
                     }
                     callback.handle((r, t) -> {
@@ -833,7 +847,9 @@ public class Driver {
 
     private CompletableFuture<HttpResponse<String>> callback(
             Request callback,
-            EnvironmentCreateResult environmentCreateResult) {
+            EnvironmentCreateResult environmentCreateResult,
+            Map<String, String> mdc) {
+
         String body;
         try {
             body = jsonMapper.writeValueAsString(environmentCreateResult);
@@ -890,6 +906,13 @@ public class Driver {
                 callback.getMethod(),
                 callback.getUri(),
                 callback.getHeaders());
+
+        try {
+            uploadResultToBifrost(environmentCreateResult, mdc);
+        } catch (Exception e) {
+            // I guess we're ok if we don't have those logs?
+            logger.warn("Could not send log to Bifrost", e);
+        }
 
         return Failsafe.with(retryPolicy)
                 .with(executor)
@@ -1038,6 +1061,32 @@ public class Driver {
             throwable = throwable.getCause();
         }
         return list.isEmpty() ? null : list.get(list.size() - 1);
+    }
+
+    /**
+     * Upload the final log to bifrost
+     *
+     * We need to capture the mdc values here since this method is called from a completablefuture where the MDC values
+     * are lost from the original caller. So we need to capture MDC values from the original caller and pass it around
+     *
+     * @param environmentCreateResult
+     * @param mdc
+     */
+    private void uploadResultToBifrost(EnvironmentCreateResult environmentCreateResult, Map<String, String> mdc) {
+        LogMetadata logMetadata = LogMetadata.builder()
+                .tag("build-log")
+                .loggerName(userLogger.getName())
+                .endTime(OffsetDateTime.now())
+                .headers(mdc)
+                .build();
+
+        logger.info("Uploading result to Bifrost");
+        if (environmentCreateResult.getStatus().isSuccess()) {
+            bifrostLogUploader.uploadString("", logMetadata);
+        } else {
+            String message = environmentCreateResult.getMessage();
+            bifrostLogUploader.uploadString(message, logMetadata);
+        }
     }
 
     /**
