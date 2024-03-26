@@ -65,6 +65,7 @@ import org.jboss.pnc.api.environmentdriver.dto.EnvironmentCreateResponse;
 import org.jboss.pnc.api.environmentdriver.dto.EnvironmentCreateResult;
 import org.jboss.pnc.bifrost.upload.BifrostLogUploader;
 import org.jboss.pnc.bifrost.upload.LogMetadata;
+import org.jboss.pnc.bifrost.upload.TagOption;
 import org.jboss.pnc.common.Random;
 import org.jboss.pnc.common.Strings;
 import org.jboss.pnc.common.log.MDCUtils;
@@ -1074,7 +1075,7 @@ public class Driver {
      */
     private void uploadResultToBifrost(EnvironmentCreateResult environmentCreateResult, Map<String, String> mdc) {
         LogMetadata logMetadata = LogMetadata.builder()
-                .tag("build-log")
+                .tag(TagOption.BUILD_LOG)
                 .loggerName(userLogger.getName())
                 .endTime(OffsetDateTime.now())
                 .headers(mdc)
