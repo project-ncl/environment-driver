@@ -76,7 +76,7 @@
     <version.lombok>1.18.32</version.lombok>
 
     <version.javadoc.plugin>3.6.3</version.javadoc.plugin>
-    <version.source.plugin>3.3.0</version.source.plugin>
+    <version.source.plugin>3.3.1</version.source.plugin>
     <tagSuffix />
   </properties>
 
