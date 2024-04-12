@@ -1085,7 +1085,7 @@ public class Driver {
         if (environmentCreateResult.getStatus().isSuccess()) {
             bifrostLogUploader.uploadString("", logMetadata);
         } else {
-            String message = environmentCreateResult.getMessage();
+            String message = environmentCreateResult.getStatus().toString();
             bifrostLogUploader.uploadString(message, logMetadata);
         }
     }
