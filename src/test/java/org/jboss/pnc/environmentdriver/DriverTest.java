@@ -262,7 +262,7 @@ public class DriverTest {
             logger.info("Environment creation completed with status: {}", creationCompleted.getStatus());
             String message = "Unexpected environment creation status.";
             Assertions.assertEquals(ResultStatus.FAILED, creationCompleted.getStatus(), message);
-            logger.info("CreationCompleted.message: [{}]", creationCompleted.getMessage());
+            logger.info("CreationCompleted.message: [{}]", creationCompleted.getStatus());
             Assertions.assertEquals(0, pingRequests.size(), "Unexpected number of received pings.");
 
             // verify bifrost log uploader was called
