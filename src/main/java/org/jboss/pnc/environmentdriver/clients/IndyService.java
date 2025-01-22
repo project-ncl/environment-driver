@@ -18,6 +18,8 @@
 package org.jboss.pnc.environmentdriver.clients;
 
 import org.eclipse.microprofile.rest.client.inject.RegisterRestClient;
+import org.jboss.pnc.api.indy.dto.IndyTokenRequestDTO;
+import org.jboss.pnc.api.indy.dto.IndyTokenResponseDTO;
 
 import javax.ws.rs.Consumes;
 import javax.ws.rs.HeaderParam;
