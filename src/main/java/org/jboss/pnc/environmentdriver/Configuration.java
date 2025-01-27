@@ -21,9 +21,10 @@ import java.util.Optional;
 
 import javax.enterprise.context.Dependent;
 
+import org.eclipse.microprofile.config.inject.ConfigProperty;
+
 import lombok.Getter;
 import lombok.Setter;
-import org.eclipse.microprofile.config.inject.ConfigProperty;
 
 @Getter
 @Setter

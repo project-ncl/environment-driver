@@ -48,7 +48,6 @@ import javax.enterprise.context.RequestScoped;
 import javax.inject.Inject;
 import javax.ws.rs.core.MediaType;
 
-import io.quarkus.oidc.client.OidcClient;
 import org.apache.commons.lang3.RandomStringUtils;
 import org.apache.commons.text.StringSubstitutor;
 import org.eclipse.microprofile.context.ManagedExecutor;
@@ -105,6 +104,7 @@ import io.fabric8.openshift.api.model.Route;
 import io.fabric8.openshift.client.OpenShiftClient;
 import io.opentelemetry.instrumentation.annotations.SpanAttribute;
 import io.opentelemetry.instrumentation.annotations.WithSpan;
+import io.quarkus.oidc.client.OidcClient;
 import net.jodah.failsafe.Failsafe;
 import net.jodah.failsafe.RetryPolicy;
 
@@ -652,8 +652,7 @@ public class Driver {
                 .list()
                 .getItems()
                 .stream()
-                .findFirst() // Only consider the first quota,
-                             // we generally only use one!
+                .findFirst() // Only consider the first quota, we generally only use one!
                 .map(
                         resourceQuota -> convertQuantity(resourceQuota.getStatus().getHard().get(identifier))
                                 - convertQuantity(resourceQuota.getStatus().getUsed().get(identifier)))

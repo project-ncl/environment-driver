@@ -29,14 +29,14 @@ import javax.ws.rs.core.Request;
 import javax.ws.rs.core.UriInfo;
 import javax.ws.rs.ext.Provider;
 
-import io.opentelemetry.api.trace.Span;
-import io.quarkus.security.identity.SecurityIdentity;
-
 import org.jboss.pnc.api.constants.MDCKeys;
 import org.jboss.pnc.common.log.MDCUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
+
+import io.opentelemetry.api.trace.Span;
+import io.quarkus.security.identity.SecurityIdentity;
 
 /**
  * @author <a href="mailto:matejonnet@gmail.com">Matej Lazar</a>
