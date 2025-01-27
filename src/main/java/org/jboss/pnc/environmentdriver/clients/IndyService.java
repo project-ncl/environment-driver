@@ -17,16 +17,16 @@
  */
 package org.jboss.pnc.environmentdriver.clients;
 
-import org.eclipse.microprofile.rest.client.inject.RegisterRestClient;
-import org.jboss.pnc.api.indy.dto.IndyTokenRequestDTO;
-import org.jboss.pnc.api.indy.dto.IndyTokenResponseDTO;
-
 import javax.ws.rs.Consumes;
 import javax.ws.rs.HeaderParam;
 import javax.ws.rs.POST;
 import javax.ws.rs.Path;
 import javax.ws.rs.Produces;
 import javax.ws.rs.core.MediaType;
+
+import org.eclipse.microprofile.rest.client.inject.RegisterRestClient;
+import org.jboss.pnc.api.indy.dto.IndyTokenRequestDTO;
+import org.jboss.pnc.api.indy.dto.IndyTokenResponseDTO;
 
 /**
  * Indy service representing the Indy server. It uses Quarkus magical rest client to generate the client implementation

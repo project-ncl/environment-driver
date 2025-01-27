@@ -18,6 +18,10 @@
 
 package org.jboss.pnc.environmentdriver.invokerserver;
 
+import static io.undertow.servlet.Servlets.defaultContainer;
+import static io.undertow.servlet.Servlets.deployment;
+import static io.undertow.servlet.Servlets.servlet;
+
 import java.security.NoSuchAlgorithmException;
 import java.util.HashSet;
 import java.util.Set;
@@ -28,10 +32,6 @@ import io.undertow.Undertow;
 import io.undertow.server.HttpHandler;
 import io.undertow.servlet.api.DeploymentInfo;
 import io.undertow.servlet.api.DeploymentManager;
-
-import static io.undertow.servlet.Servlets.defaultContainer;
-import static io.undertow.servlet.Servlets.deployment;
-import static io.undertow.servlet.Servlets.servlet;
 
 /**
  * @author <a href="mailto:matejonnet@gmail.com">Matej Lazar</a>
