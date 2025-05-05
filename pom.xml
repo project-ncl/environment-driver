@@ -69,7 +69,7 @@
     <quarkus.package.type>uber-jar</quarkus.package.type>
 
     <version.pnc-api>3.0.6</version.pnc-api>
-    <version.pnc-common>3.0.1</version.pnc-common>
+    <version.pnc-common>3.0.2</version.pnc-common>
     <version.pncmetrics>1.1.3</version.pncmetrics>
     <version.failsafe>2.4.4</version.failsafe>
     <version.commons-text>1.13.1</version.commons-text>
