@@ -21,7 +21,7 @@
   <modelVersion>4.0.0</modelVersion>
   <groupId>org.jboss.pnc</groupId>
   <artifactId>environment-driver</artifactId>
-  <version>3.2.1-SNAPSHOT</version>
+  <version>3.3.0-SNAPSHOT</version>
 
   <name>environment driver</name>
   <description>Environment driver provides REST endpoints to create and destroy Openshift objects</description>
