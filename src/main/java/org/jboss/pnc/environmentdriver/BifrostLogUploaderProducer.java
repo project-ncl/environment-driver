@@ -26,12 +26,12 @@ public class BifrostLogUploaderProducer {
     OidcClient oidcClient;
 
     private String getFreshAccessToken() {
-        return oidcClient.getTokens().await().atMost(Duration.ofSeconds(10)).getAccessToken();
+        return "Bearer " + oidcClient.getTokens().await().atMost(Duration.ofSeconds(10)).getAccessToken();
     }
 
     @Produces
     @ApplicationScoped
     public BifrostLogUploader produce() {
-        return new BifrostLogUploader(bifrostUrl, maxRetries, retryDelay, this::getFreshAccessToken);
+        return new BifrostLogUploader(bifrostUrl, this::getFreshAccessToken, maxRetries, retryDelay);
     }
 }
