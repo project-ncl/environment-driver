@@ -62,6 +62,8 @@ quarkus:
     client-id: service-account
     credentials:
       secret: secret-of-service-account
+    # try to get Tokens as fresh as possible
+    refresh-token-time-skew: 4m
 
   rest-client:
     indy-service:
@@ -79,6 +81,11 @@ quarkus:
         otlp:
           # Send telemetry data to an opentelemetry-collector
           #endpoint: http://localhost:4317
+          #
+pnc_client_auth:
+  type: OIDC # or LDAP
+  # ldap_credentials:
+  #    path: /mnt/secrets/ldap_credentials # file must be in format: <username>:<password>
 
 environment-driver:
   build-agent:
