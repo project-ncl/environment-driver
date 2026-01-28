@@ -79,6 +79,11 @@ quarkus:
         otlp:
           # Send telemetry data to an opentelemetry-collector
           #endpoint: http://localhost:4317
+          #
+pnc_client_auth:
+  type: OIDC # or LDAP
+  # ldap_credentials:
+  #    path: /mnt/secrets/ldap_credentials # file must be in format: <username>:<password>
 
 environment-driver:
   build-agent:
@@ -236,6 +241,9 @@ environment-driver:
 
 "%test":
   quarkus:
+    arc:
+      # to use the Mocked one
+      exclude-types: org.jboss.pnc.quarkus.client.auth.runtime.PNCClientAuthImpl
     oidc:
       enabled: false
     oidc-client:
