@@ -81,6 +81,7 @@ import org.jboss.pnc.environmentdriver.exceptions.UnableToRequestResourcesExcept
 import org.jboss.pnc.environmentdriver.exceptions.UnableToStartException;
 import org.jboss.pnc.environmentdriver.runtime.ApplicationLifecycle;
 import org.jboss.pnc.pncmetrics.GaugeMetric;
+import org.jboss.pnc.quarkus.client.auth.runtime.PNCClientAuth;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
@@ -104,7 +105,6 @@ import io.fabric8.openshift.api.model.Route;
 import io.fabric8.openshift.client.OpenShiftClient;
 import io.opentelemetry.instrumentation.annotations.SpanAttribute;
 import io.opentelemetry.instrumentation.annotations.WithSpan;
-import io.quarkus.oidc.client.OidcClient;
 import net.jodah.failsafe.Failsafe;
 import net.jodah.failsafe.RetryPolicy;
 
@@ -156,7 +156,7 @@ public class Driver {
     ApplicationLifecycle lifecycle;
 
     @Inject
-    OidcClient oidcClient;
+    PNCClientAuth pncClientAuth;
 
     @Inject
     BifrostLogUploader bifrostLogUploader;
@@ -185,7 +185,7 @@ public class Driver {
 
         IndyTokenResponseDTO tokenResponseDTO = indyService.getAuthToken(
                 new IndyTokenRequestDTO(environmentCreateRequest.getRepositoryBuildContentId()),
-                "Bearer " + getFreshAccessToken());
+                pncClientAuth.getHttpAuthorizationHeaderValue());
 
         String environmentId = environmentCreateRequest.getEnvironmentLabel() + "-" + Random.randString(6);
 
@@ -294,11 +294,11 @@ public class Driver {
 
             gaugeMetric.ifPresent(g -> g.incrementMetric(METRICS_POD_STARTED_FAILED_KEY));
 
-            if (rootCause != null && rootCause instanceof MismatchedInputException) {
+            if (rootCause instanceof MismatchedInputException) {
                 userLogger.error(ERROR_MESSAGE_INTRO + ERROR_MESSAGE_TEMPLATE_PARSE);
                 throw new BadResourcesRequestException(ERROR_MESSAGE_INTRO + ERROR_MESSAGE_TEMPLATE_PARSE, rootCause);
 
-            } else if (rootCause != null && rootCause instanceof KubernetesClientException
+            } else if (rootCause instanceof KubernetesClientException
                     && rootCause.getMessage().contains("exceeded quota")) {
 
                 userLogger.error(ERROR_MESSAGE_INTRO + ERROR_MESSAGE_EXCEEDED_QUOTA);
@@ -326,9 +326,7 @@ public class Driver {
             Optional<Container> sidecarInitContainer = initContainers.stream()
                     .filter(c -> "sidecar-init".equals(c.getName()))
                     .findFirst();
-            if (!sidecarInitContainer.isEmpty()) {
-                initContainers.remove(sidecarInitContainer.get());
-            }
+            sidecarInitContainer.ifPresent(initContainers::remove);
         }
     }
 
@@ -402,16 +400,11 @@ public class Driver {
                 .onFailure(ctx -> logger.error("Unable to ping ssh service: {}.", ctx.getFailure().getMessage()))
                 .onAbort(e -> logger.warn("SSH ping ping aborted: {}.", e.getFailure().getMessage()));
         return Failsafe.with(retryPolicy).with(executor).getAsync(() -> {
-            Socket socket = new Socket();
-            try {
+            try (Socket socket = new Socket()) {
                 socket.connect(inetSocketAddress, configuration.getHttpClientConnectTimeout() * 1000);
                 logger.info("Ssh-ping success.");
-            } finally {
-                try {
-                    socket.close();
-                } catch (IOException e) {
-                    logger.warn("Failed to clean-up after ssh-ping.");
-                }
+            } catch (IOException e) {
+                logger.warn("Failed to clean-up after ssh-ping.");
             }
             return inetSocketAddress;
         });
@@ -593,16 +586,11 @@ public class Driver {
         String unit = quantity.getFormat();
         double value = Double.parseDouble(quantity.getAmount());
 
-        switch (unit) {
-            case "":
-            case "Gi":
-                return value;
-            case "Mi":
-            case "m":
-                return value / 1024;
-            default:
-                throw new RuntimeException("Don't know how to convert the unit " + quantity);
-        }
+        return switch (unit) {
+            case "", "Gi" -> value;
+            case "Mi", "m" -> value / 1024;
+            default -> throw new RuntimeException("Don't know how to convert the unit " + quantity);
+        };
     }
 
     private String getPodRequestedVsAvailableResourcesInfo(String podName) {
@@ -743,8 +731,7 @@ public class Driver {
 
             if (failedPodStatus.isPresent() || failedContainerStatus.isPresent()) {
                 // The status was among the failed statuses
-                PodErrorStatuses detectedPodErrorStatus = failedPodStatus.isPresent() ? failedPodStatus.get()
-                        : failedContainerStatus.get();
+                PodErrorStatuses detectedPodErrorStatus = failedPodStatus.orElseGet(failedContainerStatus::get);
 
                 gaugeMetric.ifPresent(
                         g -> g.incrementMetric(
@@ -778,14 +765,14 @@ public class Driver {
                         ChronoUnit.MILLIS)
                 .onRetry(
                         ctx -> userLogger.warn(
-                                "Is service running retry attempt:{}, last error:{}",
+                                "Is service running retry attempt: {}, last error: {}",
                                 ctx.getAttemptCount(),
                                 ctx.getLastFailure()));
         return Failsafe.with(retryPolicy).with(executor).getAsync(() -> {
             Service service = openShiftClient.services().withName(serviceName).get();
             String clusterIP = service.getSpec().getClusterIP();
             List<ServicePort> ports = service.getSpec().getPorts();
-            if (ports == null || ports.size() == 0) {
+            if (ports == null || ports.isEmpty()) {
                 throw new DriverException("Service " + serviceName + " has no mapped ports.");
             }
             Integer clusterPort = ports.get(0).getPort(); // get the first port, there should be one only
@@ -863,7 +850,7 @@ public class Driver {
         callback.getHeaders().forEach(h -> builder.header(h.getName(), h.getValue()));
 
         // Add the service account's access token.
-        builder.header(javax.ws.rs.core.HttpHeaders.AUTHORIZATION, "Bearer " + getFreshAccessToken());
+        builder.header(javax.ws.rs.core.HttpHeaders.AUTHORIZATION, pncClientAuth.getHttpAuthorizationHeaderValue());
         HttpRequest request = builder.build();
 
         RetryPolicy<HttpResponse<String>> retryPolicy = new RetryPolicy<HttpResponse<String>>()
@@ -897,7 +884,7 @@ public class Driver {
                             lastError,
                             lastStatus);
                 })
-                .onFailure(ctx -> logger.error("Unable to send callback to: " + callback.getUri()))
+                .onFailure(ctx -> logger.error("Unable to send callback to: {}", callback.getUri()))
                 .onAbort(e -> logger.warn("Callback aborted: {}.", e.getFailure().getMessage()));
         logger.info(
                 "About to callback: {} {}. With headers: {}.",
@@ -978,9 +965,8 @@ public class Driver {
         List<Request.Header> headers = new ArrayList<>();
         headers.add(new Request.Header(HttpHeaders.CONTENT_TYPE_STRING, MediaType.APPLICATION_JSON));
 
-        MDCUtils.getHeadersFromMDC().forEach((headerName, headerValue) -> {
-            headers.add(new Request.Header(headerName, headerValue));
-        });
+        MDCUtils.getHeadersFromMDC()
+                .forEach((headerName, headerValue) -> headers.add(new Request.Header(headerName, headerValue)));
         return headers;
     }
 
@@ -1085,15 +1071,5 @@ public class Driver {
             String message = environmentCreateResult.getStatus().toString();
             bifrostLogUploader.uploadString(message, logMetadata);
         }
-    }
-
-    /**
-     * Get a fresh access token for the service account. This is done because we want to get a super-new token to be
-     * used since we're not entirely sure when the http request will be done inside the completablefuture.
-     *
-     * @return fresh access token
-     */
-    private String getFreshAccessToken() {
-        return oidcClient.getTokens().await().indefinitely().getAccessToken();
     }
 }

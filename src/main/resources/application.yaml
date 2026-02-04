@@ -21,14 +21,31 @@ quarkus:
 #        async-queue-length: 1024
 #        async-overflow-action: BLOCK
   http:
+    auth:
+      # required for LDAP: build-time property
+      basic: true
     cors:
       ~: true
       origins: "/.*/"
+
   kubernetes-client:
     connection-timeout: PT30S
     request-timeout: PT30S
     #namespace: default
     #token: secretToken
+
+  security:
+    ldap:
+      # enable LDAP: build-time property
+      enabled: true
+      cache:
+        enabled: true
+        max-age: 5m
+      dir-context:
+        url: ldaps://ldap-server.com
+      identity-mapping:
+        search-base-dn: ou=company.com
+
   oidc:
       auth-server-url: https://keycloak-host/auth/realms/pncredhat
       client-id: client
@@ -39,14 +56,17 @@ quarkus:
       keycloak:
         policy-enforcer:
           enable: false
+
   oidc-client:
     auth-server-url: https://keycloak-host/auth/realms/pncredhat
     client-id: service-account
     credentials:
       secret: secret-of-service-account
+
   rest-client:
     indy-service:
       url: "http://localhost:8080"
+
   opentelemetry:
     enabled: true
     tracer:
@@ -59,6 +79,12 @@ quarkus:
         otlp:
           # Send telemetry data to an opentelemetry-collector
           #endpoint: http://localhost:4317
+          #
+pnc_client_auth:
+  type: OIDC # or LDAP
+  # ldap_credentials:
+  #    path: /mnt/secrets/ldap_credentials # file must be in format: <username>:<password>
+
 environment-driver:
   build-agent:
     service-scheme: http
@@ -215,10 +241,16 @@ environment-driver:
 
 "%test":
   quarkus:
+    arc:
+      # to use the Mocked one
+      exclude-types: org.jboss.pnc.quarkus.client.auth.runtime.PNCClientAuthImpl
     oidc:
       enabled: false
     oidc-client:
       enabled: false
+    security:
+      ldap:
+        enabled: false
     log:
       console:
         json: false
