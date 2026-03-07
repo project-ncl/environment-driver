@@ -4,7 +4,7 @@ import java.io.IOException;
 
 import javax.enterprise.context.ApplicationScoped;
 
-import org.jboss.pnc.quarkus.client.auth.runtime.PNCClientAuth;
+import org.jboss.pnc.environmentdriver.pncclientauth.PNCClientAuth;
 
 import io.quarkus.test.Mock;
 
