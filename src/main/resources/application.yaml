@@ -242,8 +242,7 @@ environment-driver:
 "%test":
   quarkus:
     arc:
-      # to use the Mocked one
-      exclude-types: org.jboss.pnc.quarkus.client.auth.runtime.PNCClientAuthImpl
+      exclude-types: org.jboss.pnc.environmentdriver.pncclientauth.PNCClientAuthImpl
     oidc:
       enabled: false
     oidc-client:

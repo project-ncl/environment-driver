@@ -8,7 +8,7 @@ import javax.inject.Inject;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.pnc.bifrost.upload.BifrostLogUploader;
-import org.jboss.pnc.quarkus.client.auth.runtime.PNCClientAuth;
+import org.jboss.pnc.environmentdriver.pncclientauth.PNCClientAuth;
 
 @ApplicationScoped
 public class BifrostLogUploaderProducer {
