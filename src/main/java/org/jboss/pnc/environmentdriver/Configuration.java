@@ -161,4 +161,11 @@ public class Configuration {
 
     @ConfigProperty(name = "environment-driver.callback-retry-max-delay-msec", defaultValue = "5000")
     long callbackRetryMaxDelayMsec;
+
+    /**
+     * Added to help migration to a different platform where Indy is not present.
+     * Can be removed once the migration is complete
+     */
+    @ConfigProperty(name = "environment-driver.disable-indy-token-fetch", defaultValue = "false")
+    boolean disableIndyTokenFetch;
 }
