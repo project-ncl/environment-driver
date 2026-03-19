@@ -183,9 +183,15 @@ public class Driver {
             throw new StoppingException();
         }
 
-        IndyTokenResponseDTO tokenResponseDTO = indyService.getAuthToken(
-                new IndyTokenRequestDTO(environmentCreateRequest.getRepositoryBuildContentId()),
-                pncClientAuth.getHttpAuthorizationHeaderValue());
+        String accessToken = "";
+        if (configuration.isDisableIndyTokenFetch()) {
+            logger.info("Indy token fetch disabled");
+        } else {
+            IndyTokenResponseDTO tokenResponseDTO = indyService.getAuthToken(
+                    new IndyTokenRequestDTO(environmentCreateRequest.getRepositoryBuildContentId()),
+                    pncClientAuth.getHttpAuthorizationHeaderValue());
+            accessToken = tokenResponseDTO.getToken();
+        }
 
         String environmentId = environmentCreateRequest.getEnvironmentLabel() + "-" + Random.randString(6);
 
@@ -211,7 +217,7 @@ public class Driver {
         podTemplateProperties.put("containerPort", configuration.getBuildAgentContainerPort());
         podTemplateProperties.put("buildContentId", environmentCreateRequest.getRepositoryBuildContentId());
         // TODO: use another style of token for the accessToken with Indy
-        podTemplateProperties.put("accessToken", tokenResponseDTO.getToken());
+        podTemplateProperties.put("accessToken", accessToken);
 
         podTemplateProperties.put("workingDirectory", configuration.getWorkingDirectory());
         if (environmentCreateRequest.isSidecarArchiveEnabled()) {

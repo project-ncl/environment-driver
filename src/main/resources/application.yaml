@@ -86,6 +86,7 @@ pnc_client_auth:
   #    path: /mnt/secrets/ldap_credentials # file must be in format: <username>:<password>
 
 environment-driver:
+  disable-indy-token-fetch: false
   build-agent:
     service-scheme: http
     container-port: 8080
