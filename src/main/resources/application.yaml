@@ -93,6 +93,7 @@ environment-driver:
     url: "https://pnc-artifactory.org/"
     access-token: "ABCD"
     token-expiry: PT3H
+    use-reference-token: true
     fixed-scope:
       enabled: true
       scope: "applied-permissions/roles:pnc:Builder"

@@ -189,6 +189,9 @@ public class Configuration {
     @ConfigProperty(name = "environment-driver.artifactory.fixed-scope.scope")
     String artifactoryFixedTokenScope;
 
+    @ConfigProperty(name = "environment-driver.artifactory.use-reference-token", defaultValue = "true")
+    Boolean artifactoryUseReferenceToken;
+
     // TODO remove once repository-driver supports Artifactory
     @Deprecated
     @ConfigProperty(name = "environment-driver.artifactory.default-deploy-repo", defaultValue = "3H")

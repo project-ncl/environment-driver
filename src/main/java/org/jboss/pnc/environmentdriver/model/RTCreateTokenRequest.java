@@ -8,6 +8,8 @@ import lombok.extern.jackson.Jacksonized;
 @Builder
 @Jacksonized
 public record RTCreateTokenRequest(@JsonProperty("username") String username,
-                                   @JsonProperty("scope") String scope,
-                                   @JsonProperty("expires_in") Integer expiresIn) {
+        @JsonProperty("scope") String scope,
+        @JsonProperty("expires_in") Integer expiresIn,
+        @JsonProperty("force_revocable") boolean forceRevocable,
+        @JsonProperty("include_reference_token") boolean useReferenceToken) {
 }
