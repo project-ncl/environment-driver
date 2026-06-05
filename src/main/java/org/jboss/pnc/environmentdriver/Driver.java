@@ -192,13 +192,18 @@ public class Driver {
 
         String accessToken = "";
         if (configuration.isArtifactorySupportEnabled()) {
-            RTCreateTokenRequest scope = createScope(environmentCreateRequest.getRepositoryBuildContentId(), configuration.getArtifactoryTokenExpiry());
+            RTCreateTokenRequest scope = createTokenRequest(
+                    environmentCreateRequest.getRepositoryBuildContentId(),
+                    configuration.getArtifactoryTokenExpiry(),
+                    configuration.getArtifactoryUseReferenceToken());
 
             try {
-                RTToken scopedToken = artifactoryClient.createScopedToken(scope, "Bearer " + configuration.getArtifactoryAccessToken());
-                accessToken = scopedToken.accessToken();
+                RTToken scopedToken = artifactoryClient
+                        .createScopedToken(scope, "Bearer " + configuration.getArtifactoryAccessToken());
+                accessToken = configuration.getArtifactoryUseReferenceToken() ? scopedToken.referenceToken()
+                        : scopedToken.accessToken();
             } catch (Exception e) {
-                return CompletableFuture.failedFuture(new DriverException("Cannot get token from Artifactory.",e));
+                return CompletableFuture.failedFuture(new DriverException("Cannot get token from Artifactory.", e));
             }
 
         } else if (configuration.isDisableIndyTokenFetch()) {
@@ -232,11 +237,15 @@ public class Driver {
         String deployUrl = environmentCreateRequest.getRepositoryDeployUrl();
         if (configuration.isArtifactorySupportEnabled()) {
             if (dependencyUrl == null && configuration.getArtifactoryDefaultDependencyRepo().isPresent()) {
-                dependencyUrl = configuration.getArtifactoryManagerUrl().resolve("/artifactory/" + configuration.getArtifactoryDefaultDependencyRepo().get() + "/").toString();
+                dependencyUrl = configuration.getArtifactoryManagerUrl()
+                        .resolve("/artifactory/" + configuration.getArtifactoryDefaultDependencyRepo().get() + "/")
+                        .toString();
             }
 
             if (deployUrl == null && configuration.getArtifactoryDefaultDeployRepo().isPresent()) {
-                deployUrl = configuration.getArtifactoryManagerUrl().resolve("/artifactory/" + configuration.getArtifactoryDefaultDeployRepo().get() + "/").toString();
+                deployUrl = configuration.getArtifactoryManagerUrl()
+                        .resolve("/artifactory/" + configuration.getArtifactoryDefaultDeployRepo().get() + "/")
+                        .toString();
             }
         }
 
@@ -349,7 +358,10 @@ public class Driver {
         });
     }
 
-    private RTCreateTokenRequest createScope(String buildId, Duration artifactoryTokenExpiry) {
+    private RTCreateTokenRequest createTokenRequest(
+            String buildId,
+            Duration artifactoryTokenExpiry,
+            boolean useReferenceToken) {
         String scope;
         if (configuration.getArtifactoryFixedScopeEnabled()) {
             scope = configuration.getArtifactoryFixedTokenScope();
@@ -360,6 +372,8 @@ public class Driver {
         return RTCreateTokenRequest.builder()
                 .expiresIn((int) artifactoryTokenExpiry.toSeconds())
                 .username(buildId)
+                .forceRevocable(true) //has to be revocable
+                .useReferenceToken(useReferenceToken)
                 .scope(scope)
                 .build();
     }
