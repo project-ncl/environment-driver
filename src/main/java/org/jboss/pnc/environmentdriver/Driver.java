@@ -48,6 +48,7 @@ import javax.enterprise.context.RequestScoped;
 import javax.inject.Inject;
 import javax.ws.rs.core.MediaType;
 
+import org.apache.commons.lang3.NotImplementedException;
 import org.apache.commons.lang3.RandomStringUtils;
 import org.apache.commons.text.StringSubstitutor;
 import org.eclipse.microprofile.context.ManagedExecutor;
@@ -69,6 +70,7 @@ import org.jboss.pnc.common.Random;
 import org.jboss.pnc.common.Strings;
 import org.jboss.pnc.common.log.MDCUtils;
 import org.jboss.pnc.common.otel.OtelUtils;
+import org.jboss.pnc.environmentdriver.clients.ArtifactoryClient;
 import org.jboss.pnc.environmentdriver.clients.IndyService;
 import org.jboss.pnc.environmentdriver.enums.PodErrorStatuses;
 import org.jboss.pnc.environmentdriver.exceptions.BadResourcesRequestException;
@@ -79,6 +81,8 @@ import org.jboss.pnc.environmentdriver.exceptions.StoppingException;
 import org.jboss.pnc.environmentdriver.exceptions.TemporarilyUnableToStartException;
 import org.jboss.pnc.environmentdriver.exceptions.UnableToRequestResourcesException;
 import org.jboss.pnc.environmentdriver.exceptions.UnableToStartException;
+import org.jboss.pnc.environmentdriver.model.RTCreateTokenRequest;
+import org.jboss.pnc.environmentdriver.model.RTToken;
 import org.jboss.pnc.environmentdriver.pncclientauth.PNCClientAuth;
 import org.jboss.pnc.environmentdriver.runtime.ApplicationLifecycle;
 import org.jboss.pnc.pncmetrics.GaugeMetric;
@@ -166,6 +170,9 @@ public class Driver {
 
     ObjectMapper yamlMapper = new ObjectMapper(new YAMLFactory());
 
+    @RestClient
+    ArtifactoryClient artifactoryClient;
+
     private Optional<GaugeMetric> gaugeMetric = Optional.empty(); // TODO
 
     /**
@@ -184,7 +191,17 @@ public class Driver {
         }
 
         String accessToken = "";
-        if (configuration.isDisableIndyTokenFetch()) {
+        if (configuration.isArtifactorySupportEnabled()) {
+            RTCreateTokenRequest scope = createScope(environmentCreateRequest.getRepositoryBuildContentId(), configuration.getArtifactoryTokenExpiry());
+
+            try {
+                RTToken scopedToken = artifactoryClient.createScopedToken(scope, "Bearer " + configuration.getArtifactoryAccessToken());
+                accessToken = scopedToken.accessToken();
+            } catch (Exception e) {
+                return CompletableFuture.failedFuture(new DriverException("Cannot get token from Artifactory.",e));
+            }
+
+        } else if (configuration.isDisableIndyTokenFetch()) {
             logger.info("Indy token fetch disabled");
         } else {
             IndyTokenResponseDTO tokenResponseDTO = indyService.getAuthToken(
@@ -211,8 +228,23 @@ public class Driver {
         podTemplateProperties.put("proxyPort", configuration.getProxyPort().orElse(""));
         podTemplateProperties.put("nonProxyHosts", configuration.getNonProxyHosts().orElse(""));
 
-        podTemplateProperties.put("AProxDependencyUrl", environmentCreateRequest.getRepositoryDependencyUrl());
-        podTemplateProperties.put("AProxDeployUrl", environmentCreateRequest.getRepositoryDeployUrl());
+        String dependencyUrl = environmentCreateRequest.getRepositoryDependencyUrl();
+        String deployUrl = environmentCreateRequest.getRepositoryDeployUrl();
+        if (configuration.isArtifactorySupportEnabled()) {
+            if (dependencyUrl == null && configuration.getArtifactoryDefaultDependencyRepo().isPresent()) {
+                dependencyUrl = configuration.getArtifactoryManagerUrl().resolve("/artifactory/" + configuration.getArtifactoryDefaultDependencyRepo().get() + "/").toString();
+            }
+
+            if (deployUrl == null && configuration.getArtifactoryDefaultDeployRepo().isPresent()) {
+                deployUrl = configuration.getArtifactoryManagerUrl().resolve("/artifactory/" + configuration.getArtifactoryDefaultDeployRepo().get() + "/").toString();
+            }
+        }
+
+        podTemplateProperties.put("AProxDependencyUrl", dependencyUrl);
+        podTemplateProperties.put("AProxDeployUrl", deployUrl);
+
+        podTemplateProperties.put("artifactoryDependencyUrl", dependencyUrl);
+        podTemplateProperties.put("artifactoryDeployUrl", deployUrl);
 
         podTemplateProperties.put("containerPort", configuration.getBuildAgentContainerPort());
         podTemplateProperties.put("buildContentId", environmentCreateRequest.getRepositoryBuildContentId());
@@ -315,6 +347,21 @@ public class Driver {
             throw new UnableToRequestResourcesException(
                     rootCause != null ? rootCause.getMessage() : throwable.getMessage());
         });
+    }
+
+    private RTCreateTokenRequest createScope(String buildId, Duration artifactoryTokenExpiry) {
+        String scope;
+        if (configuration.getArtifactoryFixedScopeEnabled()) {
+            scope = configuration.getArtifactoryFixedTokenScope();
+        } else {
+            throw new NotImplementedException("Artifactory dynamic scope is not yet implemented");
+        }
+
+        return RTCreateTokenRequest.builder()
+                .expiresIn((int) artifactoryTokenExpiry.toSeconds())
+                .username(buildId)
+                .scope(scope)
+                .build();
     }
 
     private void processPod(Pod pod, boolean sidecarEnabled, boolean sidecarArchiveEnabled) {
