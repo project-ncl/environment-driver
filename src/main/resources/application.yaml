@@ -66,6 +66,8 @@ quarkus:
   rest-client:
     indy-service:
       url: "http://localhost:8080"
+    artifactory-client:
+      url: ${environment-driver.artifactory.url}
 
   opentelemetry:
     enabled: true
@@ -87,6 +89,13 @@ pnc_client_auth:
 
 environment-driver:
   disable-indy-token-fetch: false
+  artifactory:
+    url: "https://pnc-artifactory.org/"
+    access-token: "ABCD"
+    token-expiry: PT3H
+    fixed-scope:
+      enabled: true
+      scope: "applied-permissions/roles:pnc:Builder"
   build-agent:
     service-scheme: http
     container-port: 8080
@@ -158,6 +167,10 @@ environment-driver:
                 value: "%{AProxDependencyUrl}"
               - name: AProxDeployUrl
                 value: "%{AProxDeployUrl}"
+              - name: artifactoryDependencyUrl
+                value: "%{artifactoryDependencyUrl}"
+              - name: artifactoryDeployUrl
+                value: "%{artifactoryDeployUrl}"
               - name: buildAgentContextPath
                 value: "%{buildAgentContextPath}"
               - name: buildAgentBindPort

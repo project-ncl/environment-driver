@@ -17,6 +17,8 @@
  */
 package org.jboss.pnc.environmentdriver;
 
+import java.net.URI;
+import java.time.Duration;
 import java.util.Optional;
 
 import javax.enterprise.context.Dependent;
@@ -168,4 +170,33 @@ public class Configuration {
      */
     @ConfigProperty(name = "environment-driver.disable-indy-token-fetch", defaultValue = "false")
     boolean disableIndyTokenFetch;
+
+    @ConfigProperty(name = "environment-driver.artifactory.enabled", defaultValue = "false")
+    boolean artifactorySupportEnabled;
+
+    @ConfigProperty(name = "environment-driver.artifactory.url")
+    URI artifactoryManagerUrl;
+
+    @ConfigProperty(name = "environment-driver.artifactory.access-token")
+    String artifactoryAccessToken;
+
+    @ConfigProperty(name = "environment-driver.artifactory.token-expiry", defaultValue = "3H")
+    Duration artifactoryTokenExpiry;
+
+    @ConfigProperty(name = "environment-driver.artifactory.fixed-scope.enabled", defaultValue = "false")
+    Boolean artifactoryFixedScopeEnabled;
+
+    @ConfigProperty(name = "environment-driver.artifactory.fixed-scope.scope")
+    String artifactoryFixedTokenScope;
+
+    // TODO remove once repository-driver supports Artifactory
+    @Deprecated
+    @ConfigProperty(name = "environment-driver.artifactory.default-deploy-repo", defaultValue = "3H")
+    Optional<String> artifactoryDefaultDeployRepo;
+
+    // TODO remove once repository-driver supports Artifactory
+    @Deprecated
+    @ConfigProperty(name = "environment-driver.artifactory.default-dependency-repo", defaultValue = "3H")
+    Optional<String> artifactoryDefaultDependencyRepo;
+
 }
