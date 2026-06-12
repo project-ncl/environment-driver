@@ -82,6 +82,7 @@ import org.jboss.pnc.environmentdriver.exceptions.TemporarilyUnableToStartExcept
 import org.jboss.pnc.environmentdriver.exceptions.UnableToRequestResourcesException;
 import org.jboss.pnc.environmentdriver.exceptions.UnableToStartException;
 import org.jboss.pnc.environmentdriver.model.RTCreateTokenRequest;
+import org.jboss.pnc.environmentdriver.model.RTRevokeTokenRequest;
 import org.jboss.pnc.environmentdriver.model.RTToken;
 import org.jboss.pnc.environmentdriver.pncclientauth.PNCClientAuth;
 import org.jboss.pnc.environmentdriver.runtime.ApplicationLifecycle;
@@ -133,6 +134,7 @@ public class Driver {
             + "(there is no space available to create the new build environment).";
     public static final String ERROR_MESSAGE_TEMPLATE_PARSE = " The builder pod failed to start because an error occured while parsing either the pod or the service template.";
     public static final String ERROR_MESSAGE_EXCEEDED_QUOTA = " The maximum quota available for the build environments has been exceeded.";
+    public static final String BUILD_CONTAINER_NAME = "pnc-build-agent-container";
 
     @Inject
     @UserLogger
@@ -503,11 +505,43 @@ public class Driver {
             Pod pod = openShiftClient.pods().withName(podName).get();
             if (pod != null) {
                 openShiftClient.pods().delete(pod);
+                tryRevokeArtifactoryToken(pod);
                 logger.info("Pod {} deleted.", podName);
             } else {
                 logger.warn("Pod {} does not exists.", podName);
             }
         });
+    }
+
+    private void tryRevokeArtifactoryToken(Pod pod) {
+        if (configuration.isArtifactorySupportEnabled()) {
+            pod.getSpec()
+                    .getContainers()
+                    .stream()
+                    .filter(container -> container.getName().equals(BUILD_CONTAINER_NAME))
+                    .findFirst()
+                    .ifPresent(c -> {
+                        findAccessTokenAndRevoke(c);
+                        logger.info("Pod {} Build Token revoked.", pod);
+                    });
+        }
+    }
+
+    private void findAccessTokenAndRevoke(Container c) {
+        c.getEnv()
+                .stream()
+                .filter(env -> env.getName().equals("accessToken"))
+                .findFirst()
+                .ifPresent(env -> {
+                    try {
+                        artifactoryClient.revokeToken(
+                                new RTRevokeTokenRequest(env.getValue()),
+                                "Bearer " +
+                                        configuration.getArtifactoryAccessToken());
+                    } catch (Exception e) {
+                        logger.warn("Failed to revoke Artifactory Build Token.", e);
+                    }
+                });
     }
 
     private RetryPolicy<String> getDestroyRetryPolicy(String resourceName) {
@@ -553,6 +587,7 @@ public class Driver {
             if (podList != null) {
                 openShiftClient.pods().delete(podList.getItems());
                 logger.info("Pods {} deleted.", getItemNames(podList.getItems()));
+                podList.getItems().forEach(this::tryRevokeArtifactoryToken);
             } else {
                 logger.warn("No pods found by label {}.", environmentLabel);
             }
