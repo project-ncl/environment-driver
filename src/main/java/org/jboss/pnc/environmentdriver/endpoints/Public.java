@@ -64,7 +64,7 @@ public class Public {
     @POST
     @Path("/create")
     public CompletionStage<EnvironmentCreateResponse> create(EnvironmentCreateRequest environmentCreateRequest) {
-        logger.info("Requested new environment: {}", environmentCreateRequest.getEnvironmentLabel());
+        logger.info("Requested new environment: {}", clean(environmentCreateRequest.getEnvironmentLabel()));
         return driver.create(environmentCreateRequest);
     }
 
@@ -79,16 +79,18 @@ public class Public {
     public CompletionStage<EnvironmentCompleteResponse> complete(
             EnvironmentCompleteRequest environmentCompleteRequest) {
         if (environmentCompleteRequest.isEnableDebug()) {
-            logger.info("Requested environment debug: {}", environmentCompleteRequest.getEnvironmentId());
+            logger.info("Requested environment debug: {}", clean(environmentCompleteRequest.getEnvironmentId()));
             return driver.enableDebug(environmentCompleteRequest.getEnvironmentId());
         } else {
             if (!Strings.isEmpty(environmentCompleteRequest.getEnvironmentLabel())) {
                 logger.info(
                         "Requested environment destroyAll by label: {}",
-                        environmentCompleteRequest.getEnvironmentLabel());
+                        clean(environmentCompleteRequest.getEnvironmentLabel()));
                 driver.destroyAll(environmentCompleteRequest.getEnvironmentLabel());
             } else {
-                logger.info("Requested environment destroy by id: {}", environmentCompleteRequest.getEnvironmentId());
+                logger.info(
+                        "Requested environment destroy by id: {}",
+                        clean(environmentCompleteRequest.getEnvironmentId()));
                 driver.destroy(environmentCompleteRequest.getEnvironmentId());
             }
             return CompletableFuture.completedFuture(new EnvironmentCompleteResponse(null, -1));
@@ -103,9 +105,16 @@ public class Public {
     @PUT
     @Path("/cancel/{environmentId}")
     public EnvironmentCompleteResponse cancel(@PathParam("environmentId") String environmentId) {
-        logger.info("Requested environment destroy: {}", environmentId);
+        logger.info("Requested environment destroy: {}", clean(environmentId));
         driver.destroy(environmentId);
         return new EnvironmentCompleteResponse(null, -1);
+    }
+
+    /**
+     * Removes CR/LF from input before logging to prevent log forging
+     */
+    private static String clean(String input) {
+        return input == null ? null : input.replaceAll("[\r\n]", "_");
     }
 
     @GET
