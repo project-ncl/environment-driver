@@ -9,7 +9,7 @@ import lombok.extern.jackson.Jacksonized;
 @Jacksonized
 public record RTRevokeTokenRequest(
         /**
-         * The value can be either JWT ot ReferenceToken
+         * The value can be either JWT or ReferenceToken
          */
         @JsonProperty("token") String token) {
 }
