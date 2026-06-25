@@ -4,11 +4,12 @@ import java.net.http.HttpClient;
 import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
 
-import javax.annotation.PostConstruct;
-import javax.enterprise.context.ApplicationScoped;
-import javax.enterprise.inject.Produces;
-import javax.inject.Inject;
 import javax.net.ssl.SSLContext;
+
+import jakarta.annotation.PostConstruct;
+import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.inject.Produces;
+import jakarta.inject.Inject;
 
 import org.eclipse.microprofile.context.ManagedExecutor;
 import org.slf4j.Logger;

@@ -18,7 +18,7 @@
 
 package org.jboss.pnc.environmentdriver.invokerserver;
 
-import javax.servlet.http.HttpServlet;
+import jakarta.servlet.http.HttpServlet;
 
 import io.undertow.servlet.api.InstanceFactory;
 import io.undertow.servlet.api.InstanceHandle;
