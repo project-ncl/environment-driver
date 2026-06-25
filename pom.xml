@@ -60,13 +60,13 @@
     <maven.compiler.release>17</maven.compiler.release>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
-    <quarkus-logging-kafka.version>1.0.6</quarkus-logging-kafka.version>
-    <quarkus.platform.version>2.16.12.Final</quarkus.platform.version>
+    <quarkus-logging-kafka.version>3.0.5</quarkus-logging-kafka.version>
+    <quarkus.platform.version>3.37.0</quarkus.platform.version>
     <quarkus.platform.artifact-id>quarkus-universe-bom</quarkus.platform.artifact-id>
     <quarkus.platform.group-id>io.quarkus</quarkus.platform.group-id>
     <compiler-plugin.version>3.15.0</compiler-plugin.version>
     <surefire-plugin.version>3.5.6</surefire-plugin.version>
-    <quarkus.package.type>uber-jar</quarkus.package.type>
+    <quarkus.package.jar.type>uber-jar</quarkus.package.jar.type>
 
     <version.pnc-api>3.5.1</version.pnc-api>
     <version.pnc-common>3.5.1</version.pnc-common>
@@ -111,7 +111,7 @@
     </dependency>
     <dependency>
         <groupId>io.quarkus</groupId>
-        <artifactId>quarkus-rest-client-reactive-jackson</artifactId>
+        <artifactId>quarkus-resteasy-client-jackson</artifactId>
     </dependency>
     <dependency>
       <groupId>io.quarkus</groupId>
@@ -141,11 +141,28 @@
       <groupId>org.jboss.pnc</groupId>
       <artifactId>pnc-api</artifactId>
       <version>${version.pnc-api}</version>
+      <classifier>jakarta</classifier>
+    </dependency>
+    <dependency>
+      <groupId>org.jboss.pnc</groupId>
+      <artifactId>pnc-api-constants</artifactId>
+      <version>${version.pnc-api}</version>
     </dependency>
     <dependency>
       <groupId>org.jboss.pnc</groupId>
       <artifactId>pnc-common</artifactId>
       <version>${version.pnc-common}</version>
+      <classifier>jakarta</classifier>
+      <exclusions>
+        <exclusion>
+          <groupId>org.jboss.pnc</groupId>
+          <artifactId>pnc-api</artifactId>
+        </exclusion>
+        <exclusion>
+          <groupId>org.jboss.pnc</groupId>
+          <artifactId>pnc-api-constants</artifactId>
+        </exclusion>
+      </exclusions>
     </dependency>
     <dependency>
       <groupId>io.quarkus</groupId>
@@ -186,7 +203,7 @@
     </dependency>
     <dependency>
       <groupId>io.quarkus</groupId>
-      <artifactId>quarkus-opentelemetry-exporter-otlp</artifactId>
+      <artifactId>quarkus-opentelemetry</artifactId>
     </dependency>
     <dependency>
       <groupId>org.projectlombok</groupId>
@@ -196,7 +213,7 @@
     </dependency>
     <dependency>
       <groupId>io.quarkus</groupId>
-      <artifactId>quarkus-junit5</artifactId>
+      <artifactId>quarkus-junit</artifactId>
       <scope>test</scope>
     </dependency>
     <dependency>
@@ -221,7 +238,7 @@
     </dependency>
     <dependency>
       <groupId>io.quarkus</groupId>
-      <artifactId>quarkus-junit5-mockito</artifactId>
+      <artifactId>quarkus-junit-mockito</artifactId>
       <scope>test</scope>
     </dependency>
     <dependency>
@@ -231,7 +248,7 @@
     </dependency>
     <dependency>
       <groupId>io.quarkus</groupId>
-      <artifactId>quarkus-test-openshift-client</artifactId>
+      <artifactId>quarkus-test-kubernetes-client</artifactId>
       <scope>test</scope>
     </dependency>
   </dependencies>
