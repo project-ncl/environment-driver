@@ -2,7 +2,7 @@ package org.jboss.pnc.environmentdriver;
 
 import java.io.IOException;
 
-import javax.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.context.ApplicationScoped;
 
 import org.jboss.pnc.environmentdriver.pncclientauth.PNCClientAuth;
 

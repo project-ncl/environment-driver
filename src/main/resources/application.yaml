@@ -25,7 +25,7 @@ quarkus:
       # required for LDAP: build-time property
       basic: true
     cors:
-      ~: true
+      enabled: true
       origins: "/.*/"
 
   kubernetes-client:
@@ -53,9 +53,6 @@ quarkus:
         secret: secret
       tls:
         verification: none
-      keycloak:
-        policy-enforcer:
-          enable: false
 
   oidc-client:
     auth-server-url: https://keycloak-host/auth/realms/pncredhat
@@ -66,22 +63,25 @@ quarkus:
   rest-client:
     indy-service:
       url: "http://localhost:8080"
+      scope: jakarta.enterprise.context.ApplicationScoped
     artifactory-client:
       url: ${environment-driver.artifactory.url}
 
-  opentelemetry:
+  otel:
     enabled: true
-    tracer:
+    traces:
       enabled: true
       # reflect sampling on collector
-      resource-attributes: "sampler_ratio=0.05,service.name=environment-driver"
       sampler:
-        ratio: 0.05
-      exporter:
-        otlp:
-          # Send telemetry data to an opentelemetry-collector
-          #endpoint: http://localhost:4317
-          #
+        ~: traceidratio
+        arg: "0.05"
+    resource:
+      attributes: "sampler_ratio=0.05,service.name=environment-driver"
+    exporter:
+      otlp:
+        # Send telemetry data to an opentelemetry-collector
+        #traces:
+        #  endpoint: http://localhost:4317
 pnc_client_auth:
   type: OIDC # or LDAP
   # ldap_credentials:
@@ -258,6 +258,9 @@ environment-driver:
   quarkus:
     arc:
       exclude-types: org.jboss.pnc.environmentdriver.pncclientauth.PNCClientAuthImpl
+    http:
+      auth:
+        basic: false
     oidc:
       enabled: false
     oidc-client:
@@ -267,7 +270,8 @@ environment-driver:
         enabled: false
     log:
       console:
-        json: false
+        json:
+          enabled: false
   environment-driver:
     http-client:
       connect-timeout: 1
@@ -364,4 +368,5 @@ environment-driver:
   quarkus:
     log:
       console:
-        json: false
+        json:
+          enabled: false
