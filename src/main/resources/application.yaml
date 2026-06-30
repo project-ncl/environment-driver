@@ -1,4 +1,6 @@
 quarkus:
+  application:
+    name: environment-driver
   shutdown:
     timeout: 300
   log:
@@ -67,21 +69,6 @@ quarkus:
     artifactory-client:
       url: ${environment-driver.artifactory.url}
 
-  otel:
-    enabled: true
-    traces:
-      enabled: true
-      # reflect sampling on collector
-      sampler:
-        ~: traceidratio
-        arg: "0.05"
-    resource:
-      attributes: "sampler_ratio=0.05,service.name=environment-driver"
-    exporter:
-      otlp:
-        # Send telemetry data to an opentelemetry-collector
-        #traces:
-        #  endpoint: http://localhost:4317
 pnc_client_auth:
   type: OIDC # or LDAP
   # ldap_credentials:
