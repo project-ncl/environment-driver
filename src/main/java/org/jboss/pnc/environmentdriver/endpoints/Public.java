@@ -34,6 +34,7 @@ import org.jboss.pnc.api.environmentdriver.dto.EnvironmentCompleteResponse;
 import org.jboss.pnc.api.environmentdriver.dto.EnvironmentCreateRequest;
 import org.jboss.pnc.api.environmentdriver.dto.EnvironmentCreateResponse;
 import org.jboss.pnc.common.Strings;
+import org.jboss.pnc.common.log.LogSanitizer;
 import org.jboss.pnc.environmentdriver.BuildInformationConstants;
 import org.jboss.pnc.environmentdriver.Driver;
 import org.slf4j.Logger;
@@ -64,7 +65,9 @@ public class Public {
     @POST
     @Path("/create")
     public CompletionStage<EnvironmentCreateResponse> create(EnvironmentCreateRequest environmentCreateRequest) {
-        logger.info("Requested new environment: {}", clean(environmentCreateRequest.getEnvironmentLabel()));
+        logger.info(
+                "Requested new environment: {}",
+                LogSanitizer.clean(environmentCreateRequest.getEnvironmentLabel()));
         return driver.create(environmentCreateRequest);
     }
 
@@ -79,18 +82,20 @@ public class Public {
     public CompletionStage<EnvironmentCompleteResponse> complete(
             EnvironmentCompleteRequest environmentCompleteRequest) {
         if (environmentCompleteRequest.isEnableDebug()) {
-            logger.info("Requested environment debug: {}", clean(environmentCompleteRequest.getEnvironmentId()));
+            logger.info(
+                    "Requested environment debug: {}",
+                    LogSanitizer.clean(environmentCompleteRequest.getEnvironmentId()));
             return driver.enableDebug(environmentCompleteRequest.getEnvironmentId());
         } else {
             if (!Strings.isEmpty(environmentCompleteRequest.getEnvironmentLabel())) {
                 logger.info(
                         "Requested environment destroyAll by label: {}",
-                        clean(environmentCompleteRequest.getEnvironmentLabel()));
+                        LogSanitizer.clean(environmentCompleteRequest.getEnvironmentLabel()));
                 driver.destroyAll(environmentCompleteRequest.getEnvironmentLabel());
             } else {
                 logger.info(
                         "Requested environment destroy by id: {}",
-                        clean(environmentCompleteRequest.getEnvironmentId()));
+                        LogSanitizer.clean(environmentCompleteRequest.getEnvironmentId()));
                 driver.destroy(environmentCompleteRequest.getEnvironmentId());
             }
             return CompletableFuture.completedFuture(new EnvironmentCompleteResponse(null, -1));
@@ -105,16 +110,9 @@ public class Public {
     @PUT
     @Path("/cancel/{environmentId}")
     public EnvironmentCompleteResponse cancel(@PathParam("environmentId") String environmentId) {
-        logger.info("Requested environment destroy: {}", clean(environmentId));
+        logger.info("Requested environment destroy: {}", LogSanitizer.clean(environmentId));
         driver.destroy(environmentId);
         return new EnvironmentCompleteResponse(null, -1);
-    }
-
-    /**
-     * Removes CR/LF from input before logging to prevent log forging
-     */
-    private static String clean(String input) {
-        return input == null ? null : input.replaceAll("[\r\n]", "_");
     }
 
     @GET
