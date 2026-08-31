@@ -338,6 +338,12 @@ public class Driver {
             return new EnvironmentCreateResponse(environmentId, getCancelRequest(environmentId));
         }, executor).exceptionally(throwable -> {
 
+            // Best-effort clean up of any resource that was successfully created before the
+            // other request failed. Without this, a pod (or service) created while its
+            // counterpart failed would be orphaned: create() completes exceptionally, so the
+            // caller never receives the environmentId and cannot target it with destroy().
+            cleanupPartialResources(podName, serviceName, podRequested, serviceRequested);
+
             Throwable rootCause = getRootCause(throwable);
             logger.error("Exception thrown with message: {}", throwable, rootCause);
 
@@ -358,6 +364,44 @@ public class Driver {
             throw new UnableToRequestResourcesException(
                     rootCause != null ? rootCause.getMessage() : throwable.getMessage());
         });
+    }
+
+    /**
+     * Best-effort deletion of resources that were created while the sibling creation request failed.
+     *
+     * The delete is chained onto each creation future via {@code thenAcceptAsync}, so it only runs once
+     * the resource has actually been created (the action is skipped when the future completed
+     * exceptionally). Chaining also closes the race where a slow-completing request would create its
+     * resource after the failure path had already run: the delete waits for that future to settle first.
+     */
+    private void cleanupPartialResources(
+            String podName,
+            String serviceName,
+            CompletableFuture<Pod> podRequested,
+            CompletableFuture<Service> serviceRequested) {
+        podRequested.thenAcceptAsync(pod -> {
+            if (pod != null) {
+                try {
+                    openShiftClient.pods().delete(pod);
+                    logger.info("Cleaned up orphaned pod {} after failed environment creation.", podName);
+                } catch (Exception e) {
+                    logger.warn("Failed to clean up orphaned pod {} after failed environment creation.", podName, e);
+                }
+            }
+        }, executor);
+        serviceRequested.thenAcceptAsync(service -> {
+            if (service != null) {
+                try {
+                    openShiftClient.services().delete(service);
+                    logger.info("Cleaned up orphaned service {} after failed environment creation.", serviceName);
+                } catch (Exception e) {
+                    logger.warn(
+                            "Failed to clean up orphaned service {} after failed environment creation.",
+                            serviceName,
+                            e);
+                }
+            }
+        }, executor);
     }
 
     private RTCreateTokenRequest createTokenRequest(
