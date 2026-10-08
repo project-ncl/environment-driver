@@ -48,7 +48,6 @@ import jakarta.enterprise.context.RequestScoped;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.core.MediaType;
 
-import org.apache.commons.lang3.NotImplementedException;
 import org.apache.commons.lang3.RandomStringUtils;
 import org.apache.commons.text.StringSubstitutor;
 import org.eclipse.microprofile.context.ManagedExecutor;
@@ -408,12 +407,17 @@ public class Driver {
             String buildId,
             Duration artifactoryTokenExpiry,
             boolean useReferenceToken) {
-        String scope;
+        List<String> scopes = new ArrayList<>();
         if (configuration.getArtifactoryFixedScopeEnabled()) {
-            scope = configuration.getArtifactoryFixedTokenScope();
-        } else {
-            throw new NotImplementedException("Artifactory dynamic scope is not yet implemented");
+            scopes.addAll(configuration.getArtifactoryFixedTokenScopes());
         }
+        if (configuration.getArtifactoryUseDynamicDeployScope()) {
+            // adds a artifact:<<project>>-???-<<buildContentId>>:r,w,d write scope
+            // the ??? allows npm,mvn,gen,rpm... package names
+            // Docs: https://docs.jfrog.com/administration/reference/create-scoped-token#resource-permission-scopes
+            scopes.add("artifact:" + configuration.getArtifactoryProject() + "-???-" + buildId + ":r,w,d");
+        }
+        String scope = String.join(" ", scopes);
 
         return RTCreateTokenRequest.builder()
                 .expiresIn((int) artifactoryTokenExpiry.toSeconds())
