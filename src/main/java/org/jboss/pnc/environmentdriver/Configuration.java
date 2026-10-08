@@ -19,6 +19,7 @@ package org.jboss.pnc.environmentdriver;
 
 import java.net.URI;
 import java.time.Duration;
+import java.util.List;
 import java.util.Optional;
 
 import jakarta.enterprise.context.Dependent;
@@ -183,11 +184,17 @@ public class Configuration {
     @ConfigProperty(name = "environment-driver.artifactory.token-expiry", defaultValue = "3H")
     Duration artifactoryTokenExpiry;
 
+    @ConfigProperty(name = "environment-driver.artifactory.project")
+    String artifactoryProject;
+
+    @ConfigProperty(name = "environment-driver.artifactory.use-dynamic-deploy-scope", defaultValue = "false")
+    Boolean artifactoryUseDynamicDeployScope;
+
     @ConfigProperty(name = "environment-driver.artifactory.fixed-scope.enabled", defaultValue = "false")
     Boolean artifactoryFixedScopeEnabled;
 
-    @ConfigProperty(name = "environment-driver.artifactory.fixed-scope.scope")
-    String artifactoryFixedTokenScope;
+    @ConfigProperty(name = "environment-driver.artifactory.fixed-scope.scopes")
+    List<String> artifactoryFixedTokenScopes;
 
     @ConfigProperty(name = "environment-driver.artifactory.use-reference-token", defaultValue = "true")
     Boolean artifactoryUseReferenceToken;
