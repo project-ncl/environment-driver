@@ -313,6 +313,11 @@
               </dependency>
           </dependencies>
           <configuration>
+          <pom>
+            <sortPom>
+              <expandEmptyElements>false</expandEmptyElements>
+            </sortPom>
+          </pom>
               <java>
                   <removeUnusedImports />
                   <importOrder>
