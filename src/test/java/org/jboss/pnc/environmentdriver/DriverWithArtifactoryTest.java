@@ -99,6 +99,7 @@ public class DriverWithArtifactoryTest extends AbstractDriverTest {
 
         EnvironmentCreateRequest request = EnvironmentCreateRequest.builder()
                 .environmentLabel("env1")
+                .repositoryDeployUrl("https://artifactory.com/artifactory/NCL-mvn-" + buildContentId)
                 .repositoryBuildContentId(buildContentId)
                 .completionCallback(callbackRequest)
                 .build();
@@ -129,6 +130,69 @@ public class DriverWithArtifactoryTest extends AbstractDriverTest {
 
         assertThat(scope).contains("artifact:NCL-*:r");
         assertThat(scope).contains("artifact:NCL-???-" + buildContentId + ":r,w,d");
+
+        // clean up
+        given().contentType(MediaType.APPLICATION_JSON)
+                .headers(requestHeaders())
+                .body(request)
+                .when()
+                .put("/cancel/" + environmentCreateResponse.getEnvironmentId())
+                .then()
+                .statusCode(200);
+    }
+
+    @Test
+    @Timeout(15)
+    public void shouldCreateTokenWithDynamicDeployScopeForTempBuild()
+            throws URISyntaxException, InterruptedException {
+        // given
+        String buildContentId = "build-67890";
+        String tempDeployUrl = "https://artifactory.com/artifactory/NCL-mvn-temp-" + buildContentId;
+        RTToken stubbedToken = RTToken.builder().accessToken("mocked-access-token").build();
+        ArgumentCaptor<RTCreateTokenRequest> tokenRequestCaptor = ArgumentCaptor
+                .forClass(RTCreateTokenRequest.class);
+        when(artifactoryClient.createScopedToken(tokenRequestCaptor.capture(), anyString())).thenReturn(stubbedToken);
+
+        Request callbackRequest = new Request(
+                Request.Method.POST,
+                new URI("http://localhost:" + CALLBACK_PORT + "/" + CallbackHandler.class.getSimpleName()),
+                Collections.singletonList(
+                        new Request.Header(HttpHeaders.CONTENT_TYPE_STRING, MediaType.APPLICATION_JSON)));
+
+        EnvironmentCreateRequest request = EnvironmentCreateRequest.builder()
+                .environmentLabel("env2")
+                .repositoryDeployUrl(tempDeployUrl)
+                .repositoryBuildContentId(buildContentId)
+                .completionCallback(callbackRequest)
+                .build();
+
+        // when
+        EnvironmentCreateResponse environmentCreateResponse = given().contentType(MediaType.APPLICATION_JSON)
+                .headers(requestHeaders())
+                .body(request)
+                .when()
+                .post("/create")
+                .then()
+                .statusCode(200)
+                .extract()
+                .body()
+                .as(EnvironmentCreateResponse.class);
+
+        // then — wait for completion callback
+        Request callback = callbackRequests.take();
+        EnvironmentCreateResult creationCompleted = mapper
+                .convertValue(callback.getAttachment(), EnvironmentCreateResult.class);
+        logger.info("Environment creation completed with status: {}", creationCompleted.getStatus());
+        Assertions.assertEquals(ResultStatus.SUCCESS, creationCompleted.getStatus());
+
+        // verify the token scope includes the temp- prefix for temporary build repos
+        RTCreateTokenRequest capturedRequest = tokenRequestCaptor.getValue();
+        String scope = capturedRequest.scope();
+        logger.info("Captured Artifactory token scope for temp build: {}", scope);
+
+        assertThat(scope).contains("artifact:NCL-*:r");
+        assertThat(scope).contains("artifact:NCL-???-temp-" + buildContentId + ":r,w,d");
+        assertThat(scope).doesNotContain("artifact:NCL-???-" + buildContentId + ":r,w,d");
 
         // clean up
         given().contentType(MediaType.APPLICATION_JSON)

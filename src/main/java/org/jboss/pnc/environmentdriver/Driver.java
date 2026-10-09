@@ -198,7 +198,8 @@ public class Driver {
                 scope = createTokenRequest(
                         environmentCreateRequest.getRepositoryBuildContentId(),
                         configuration.getArtifactoryTokenExpiry(),
-                        configuration.getArtifactoryUseReferenceToken());
+                        configuration.getArtifactoryUseReferenceToken(),
+                        environmentCreateRequest.getRepositoryDeployUrl());
             } catch (DriverException e) {
                 return CompletableFuture.failedFuture(e);
             }
@@ -411,16 +412,17 @@ public class Driver {
     private RTCreateTokenRequest createTokenRequest(
             String buildId,
             Duration artifactoryTokenExpiry,
-            boolean useReferenceToken) throws DriverException {
+            boolean useReferenceToken,
+            String repositoryDeployUrl) throws DriverException {
         List<String> scopes = new ArrayList<>();
         if (configuration.getArtifactoryFixedScopeEnabled()) {
             scopes.addAll(configuration.getArtifactoryFixedTokenScopes());
         }
         if (configuration.getArtifactoryUseDynamicDeployScope()) {
-            // adds a artifact:<<project>>-???-<<buildContentId>>:r,w,d write scope
-            // the ??? allows npm,mvn,gen,rpm... package names
-            // Docs: https://docs.jfrog.com/administration/reference/create-scoped-token#resource-permission-scopes
-            scopes.add("artifact:" + configuration.getArtifactoryProject() + "-???-" + buildId + ":r,w,d");
+
+            boolean isTemp = repositoryDeployUrl.contains("temp-" + buildId);
+            // Adds a artifact:<<project>>-???-<<buildContentId>>:r,w,d write scope.
+            scopes.add(createBuildDeployScope(buildId, configuration.getArtifactoryProject(), isTemp));
         }
         if (scopes.isEmpty()) {
             throw new DriverException("Environment driver misconfigured. RT Token scope is empty.");
@@ -434,6 +436,36 @@ public class Driver {
                 .useReferenceToken(useReferenceToken)
                 .scope(scope)
                 .build();
+    }
+
+    /**
+     * Adds a artifact:<<project>>-???-<<buildContentId>>:r,w,d write scope.
+     * The ??? allows npm,mvn,gen,rpm... package names. Additionally, this method handles temporary build repos.
+     *
+     * @param buildId buildContentId
+     * @param project Artifactory project
+     * @param isTemp whether the build repo is a temporary build
+     * @see <a href=
+     *      "https://docs.jfrog.com/administration/reference/create-scoped-token#resource-permission-scopes">Scoped
+     *      Tokens</a>
+     * @return build repo write permission in scoped token format
+     */
+    private String createBuildDeployScope(String buildId, String project, boolean isTemp) {
+        StringBuilder builder = new StringBuilder("artifact:");
+        // Project
+        builder.append(project);
+        // package names
+        builder.append("-???-");
+        // temp builds have prefix
+        if (isTemp) {
+            builder.append("temp-");
+        }
+        // Build content id
+        builder.append(buildId);
+        // permissions
+        builder.append(":r,w,d");
+
+        return builder.toString();
     }
 
     private void processPod(Pod pod, boolean sidecarEnabled, boolean sidecarArchiveEnabled) {
