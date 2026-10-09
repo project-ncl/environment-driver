@@ -455,7 +455,7 @@ public class Driver {
         // Project
         builder.append(project);
         // package names
-        builder.append("-???-");
+        builder.append("-*-");
         // temp builds have prefix
         if (isTemp) {
             builder.append("temp-");
