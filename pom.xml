@@ -320,7 +320,7 @@
           <java>
             <removeUnusedImports/>
             <importOrder>
-              <order>java,javax,jakarta,org,com</order>
+              <file>java-import-order.txt</file>
             </importOrder>
             <eclipse>
               <file>java-formatter.xml</file>
