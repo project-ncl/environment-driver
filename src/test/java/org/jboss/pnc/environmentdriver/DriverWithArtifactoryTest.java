@@ -129,7 +129,7 @@ public class DriverWithArtifactoryTest extends AbstractDriverTest {
         logger.info("Captured Artifactory token scope: {}", scope);
 
         assertThat(scope).contains("artifact:NCL-*:r");
-        assertThat(scope).contains("artifact:NCL-???-" + buildContentId + ":r,w,d");
+        assertThat(scope).contains("artifact:NCL-*-" + buildContentId + ":r,w,d");
 
         // clean up
         given().contentType(MediaType.APPLICATION_JSON)
@@ -191,8 +191,8 @@ public class DriverWithArtifactoryTest extends AbstractDriverTest {
         logger.info("Captured Artifactory token scope for temp build: {}", scope);
 
         assertThat(scope).contains("artifact:NCL-*:r");
-        assertThat(scope).contains("artifact:NCL-???-temp-" + buildContentId + ":r,w,d");
-        assertThat(scope).doesNotContain("artifact:NCL-???-" + buildContentId + ":r,w,d");
+        assertThat(scope).contains("artifact:NCL-*-temp-" + buildContentId + ":r,w,d");
+        assertThat(scope).doesNotContain("artifact:NCL-*-" + buildContentId + ":r,w,d");
 
         // clean up
         given().contentType(MediaType.APPLICATION_JSON)
