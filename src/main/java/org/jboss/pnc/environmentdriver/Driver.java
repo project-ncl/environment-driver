@@ -193,10 +193,15 @@ public class Driver {
 
         String accessToken = "";
         if (configuration.isArtifactorySupportEnabled()) {
-            RTCreateTokenRequest scope = createTokenRequest(
-                    environmentCreateRequest.getRepositoryBuildContentId(),
-                    configuration.getArtifactoryTokenExpiry(),
-                    configuration.getArtifactoryUseReferenceToken());
+            RTCreateTokenRequest scope;
+            try {
+                scope = createTokenRequest(
+                        environmentCreateRequest.getRepositoryBuildContentId(),
+                        configuration.getArtifactoryTokenExpiry(),
+                        configuration.getArtifactoryUseReferenceToken());
+            } catch (DriverException e) {
+                return CompletableFuture.failedFuture(e);
+            }
 
             try {
                 RTToken scopedToken = artifactoryClient
@@ -406,7 +411,7 @@ public class Driver {
     private RTCreateTokenRequest createTokenRequest(
             String buildId,
             Duration artifactoryTokenExpiry,
-            boolean useReferenceToken) {
+            boolean useReferenceToken) throws DriverException {
         List<String> scopes = new ArrayList<>();
         if (configuration.getArtifactoryFixedScopeEnabled()) {
             scopes.addAll(configuration.getArtifactoryFixedTokenScopes());
@@ -416,6 +421,9 @@ public class Driver {
             // the ??? allows npm,mvn,gen,rpm... package names
             // Docs: https://docs.jfrog.com/administration/reference/create-scoped-token#resource-permission-scopes
             scopes.add("artifact:" + configuration.getArtifactoryProject() + "-???-" + buildId + ":r,w,d");
+        }
+        if (scopes.isEmpty()) {
+            throw new DriverException("Environment driver misconfigured. RT Token scope is empty.");
         }
         String scope = String.join(" ", scopes);
 
